@@ -1,220 +1,130 @@
 import sys
-import csv
 import os
-from PIL import Image, ImageDraw, ImageFont
+import csv
+import webbrowser
+import urllib.parse
+import tkinter as tk
+from tkinter import ttk, messagebox
+from PIL import Image, ImageTk
 
-def resolver_caminho_foto(foto_raw):
-    foto_path = foto_raw.strip()
-    if not foto_path:
-        return None
-    
-    if os.path.exists(foto_path):
-        return foto_path
-
-    extensoes = ['.jpg', '.JPG', '.jpeg', '.JPEG', '.png', '.PNG', '.bmp', '.BMP']
-    for ext in extensoes:
-        caminho_teste = foto_path + ext
-        if os.path.exists(caminho_teste):
-            return caminho_teste
-
-    return None
-
-def centralizar_texto(draw, text, font, x_start, y_start, width, fill_color):
-    bbox = font.getbbox(text)
-    text_w = bbox[2] - bbox[0]
-    x = x_start + (width - text_w) // 2
-    draw.text((x, y_start), text, fill=fill_color, font=font)
-
-def gerar_jpeg(csv_path, output_jpg):
+def ler_metadados_csv(csv_path):
+    meta = {'fone': '', 'rodape': '', 'titulo': ''}
     if not os.path.exists(csv_path):
-        return
+        return meta
 
-    CARD_W, CARD_H = 300, 320
-    COLS = 4
-    MARGIN = 20
-    PADDING = 10
-    HEADER_H = 85
-    FOOTER_H = 60
-    IMG_SIZE = (200, 160)
-
-    # Cores
-    COLOR_DARK_GREEN = (34, 112, 44)
-    COLOR_LIGHT_GREEN = (228, 243, 227)
-    BG_COLOR = (245, 245, 245)
-    CARD_BG = (255, 255, 255)
-    CARD_BORDER = (220, 220, 220)
-    TEXT_DARK = (20, 20, 20)
-    TEXT_WHITE = (255, 255, 255)
-
-    try:
-        font_header_title = ImageFont.truetype("arialbd.ttf", 26)
-        font_header_sub = ImageFont.truetype("arial.ttf", 13)
-        font_code = ImageFont.truetype("arialbd.ttf", 11)
-        font_title = ImageFont.truetype("arialbd.ttf", 12)
-        font_label = ImageFont.truetype("arialbd.ttf", 10)
-        font_price = ImageFont.truetype("arialbd.ttf", 18)
-        font_footer = ImageFont.truetype("arialbd.ttf", 17)
-    except:
-        font_header_title = font_header_sub = font_code = font_title = font_label = font_price = font_footer = ImageFont.load_default()
-
-    # Leitura e Metadados
-    meta = {
-        'titulo': 'ENCARTE DE PRODUTOS SUJEITO A ALTERAÇÕES DE PREÇOS',
-        'logo': r'f:\unico\logo\oeste.jpg',
-        'logo_fone': r'f:\unico\logo\ico-whats.bmp',
-        'rodape': '',
-        'fone': ''
-    }
-
-    produtos = []
     with open(csv_path, mode='r', encoding='latin-1') as f:
         linhas = [line.strip() for line in f if line.strip()]
 
-    is_produtos = False
     for linha in linhas:
         colunas = linha.split(';')
         col0 = colunas[0].lower().strip()
-
         if col0 in ['codigo', 'fco', 'code']:
-            is_produtos = True
-            continue
+            break
+        if col0 == 'fone':
+            meta['fone'] = colunas[1].strip()
+        elif col0 in ['rodape', 'contato']:
+            meta['rodape'] = colunas[1].strip()
+        elif col0 == 'titulo':
+            meta['titulo'] = colunas[1].strip()
+            
+    return meta
 
-        if not is_produtos:
-            if col0 == 'titulo': meta['titulo'] = colunas[1].strip()
-            elif col0 in ['logo', 'logo_empresa']: meta['logo'] = colunas[1].strip()
-            elif col0 in ['logo_fone', 'logo_whats']: meta['logo_fone'] = colunas[1].strip()
-            elif col0 in ['rodape', 'contato']: meta['rodape'] = colunas[1].strip()
-            elif col0 == 'fone': meta['fone'] = colunas[1].strip()
-            elif len(colunas) >= 5:
-                is_produtos = True
+def limpar_numero_whatsapp(fone_raw):
+    # Remove caracteres nao numericos
+    apenas_numeros = "".join(c for c in fone_raw if c.isdigit())
+    if not apenas_numeros:
+        return ""
+    # Se nao tiver codigo do pais, adiciona 55 (Brasil)
+    if len(apenas_numeros) in [10, 11]:
+        return "55" + apenas_numeros
+    return apenas_numeros
 
-        if is_produtos and len(colunas) >= 5:
-            produtos.append({
-                'codigo': colunas[0].strip(),
-                'descricao': colunas[1].strip(),
-                'marca': colunas[2].strip(),
-                'preco': colunas[3].strip(),
-                'foto': colunas[4].strip()
-            })
+class AppVisualizador:
+    def __init__(self, root, csv_path, jpg_path):
+        self.root = root
+        self.csv_path = csv_path
+        self.jpg_path = jpg_path
 
-    if not produtos:
-        return
+        self.meta = ler_metadados_csv(csv_path)
+        self.num_whats = limpar_numero_whatsapp(self.meta.get('fone', ''))
 
-    total_prods = len(produtos)
-    rows = (total_prods + COLS - 1) // COLS
+        self.root.title("Visualizador de Encarte - Oeste Pharma")
+        self.root.geometry("1000x750")
+        self.root.configure(bg="#f0f0f0")
 
-    img_w = (COLS * CARD_W) + ((COLS + 1) * MARGIN)
-    grid_h = (rows * CARD_H) + ((rows + 1) * MARGIN)
-    img_h = HEADER_H + grid_h + FOOTER_H
+        # --- PAINEL SUPERIOR (AÇOES) ---
+        frame_topo = tk.Frame(self.root, bg="#22702C", padding=10)
+        frame_topo.pack(fill="x", side="top")
 
-    canvas = Image.new('RGB', (img_w, img_h), BG_COLOR)
-    draw = ImageDraw.Draw(canvas)
+        lbl_titulo = tk.Label(frame_topo, text="Encarte Gerado com Sucesso!", font=("Arial", 14, "bold"), fg="white", bg="#22702C")
+        lbl_titulo.pack(side="left", padx=10)
 
-    # --- CABEÇALHO ---
-    draw.rectangle([0, 0, img_w, HEADER_H], fill=COLOR_DARK_GREEN)
+        # Botao WhatsApp
+        btn_whats = tk.Button(
+            frame_topo, 
+            text="📱 Abrir WhatsApp", 
+            font=("Arial", 11, "bold"), 
+            bg="#25D366", 
+            fg="white", 
+            activebackground="#1EBE5D",
+            cursor="hand2",
+            command=self.abrir_whatsapp
+        )
+        btn_whats.pack(side="right", padx=10)
 
-    # Logo Empresa (Esquerda)
-    path_logo = resolver_caminho_foto(meta['logo'])
-    if path_logo:
-        try:
-            logo = Image.open(path_logo).convert('RGBA')
-            logo.thumbnail((220, 65), Image.Resampling.LANCZOS)
-            canvas.paste(logo, (MARGIN, (HEADER_H - logo.height) // 2), logo)
-        except:
-            draw.text((MARGIN, 25), "Oeste Pharma", fill=TEXT_WHITE, font=font_header_title)
-    else:
-        draw.text((MARGIN, 25), "Oeste Pharma", fill=TEXT_WHITE, font=font_header_title)
+        # Botao Abrir Pasta
+        btn_pasta = tk.Button(
+            frame_topo, 
+            text="📁 Abrir Pasta", 
+            font=("Arial", 11), 
+            bg="#ffffff", 
+            fg="#333333", 
+            cursor="hand2",
+            command=self.abrir_pasta
+        )
+        btn_pasta.pack(side="right", padx=5)
 
-    # Título + Subtítulo (Alinhados à Direita)
-    txt_titulo = meta['titulo']
-    bbox_t = font_header_title.getbbox(txt_titulo)
-    w_t = bbox_t[2] - bbox_t[0]
-    draw.text((img_w - MARGIN - w_t, 16), txt_titulo, fill=TEXT_WHITE, font=font_header_title)
+        # --- PAINEL CENTRAL (IMAGEM) ---
+        self.canvas = tk.Canvas(self.root, bg="#333333")
+        self.canvas.pack(fill="both", expand=True)
 
-    txt_sub = "www.oestepharma.com.br"
-    bbox_s = font_header_sub.getbbox(txt_sub)
-    w_s = bbox_s[2] - bbox_s[0]
-    draw.text((img_w - MARGIN - w_s, 54), txt_sub, fill=TEXT_WHITE, font=font_header_sub)
-
-    # --- CARDS DE PRODUTOS ---
-    start_y = HEADER_H + MARGIN
-
-    for idx, prod in enumerate(produtos):
-        col = idx % COLS
-        row = idx // COLS
-
-        x = MARGIN + col * (CARD_W + MARGIN)
-        y = start_y + row * (CARD_H + MARGIN)
-
-        draw.rectangle([x, y, x + CARD_W, y + CARD_H], fill=CARD_BG, outline=CARD_BORDER, width=2)
-
-        foto_path = resolver_caminho_foto(prod.get('foto', ''))
-        if foto_path:
-            try:
-                img_obj = Image.open(foto_path).convert('RGB')
-                img_obj.thumbnail(IMG_SIZE, Image.Resampling.LANCZOS)
-                img_x = x + (CARD_W - img_obj.width) // 2
-                img_y = y + 10 + (IMG_SIZE[1] - img_obj.height) // 2
-                canvas.paste(img_obj, (img_x, img_y))
-            except:
-                draw.rectangle([x + 50, y + 20, x + CARD_W - 50, y + 150], outline=(220,220,220))
-                centralizar_texto(draw, "SEM FOTO", font_code, x, y + 85, CARD_W, (150,150,150))
+        if os.path.exists(self.jpg_path):
+            self.carregar_imagem()
         else:
-            draw.rectangle([x + 50, y + 20, x + CARD_W - 50, y + 150], outline=(220,220,220))
-            centralizar_texto(draw, "SEM FOTO", font_code, x, y + 85, CARD_W, (150,150,150))
+            self.canvas.create_text(500, 350, text="Arquivo JPG não encontrado!", fill="white", font=("Arial", 16))
 
-        # Faixa Código
-        draw.rectangle([x + 10, y + 175, x + CARD_W - 10, y + 195], fill=COLOR_LIGHT_GREEN)
-        txt_cod = f"COD: {prod.get('codigo','')} - {prod.get('marca','')}"[:36]
-        centralizar_texto(draw, txt_cod, font_code, x, y + 179, CARD_W, COLOR_DARK_GREEN)
+    def carregar_imagem(self):
+        self.pil_img = Image.open(self.jpg_path)
+        
+        # Redimensiona mantendo proporcao para caber na tela
+        img_w, img_h = self.pil_img.size
+        max_w, max_h = 960, 640
+        ratio = min(max_w/img_w, max_h/img_h)
+        novo_tamanho = (int(img_w * ratio), int(img_h * ratio))
 
-        # Descrição
-        txt_desc = prod.get('descricao','')[:38]
-        centralizar_texto(draw, txt_desc, font_title, x, y + 202, CARD_W, TEXT_DARK)
+        img_resized = self.pil_img.resize(novo_tamanho, Image.Resampling.LANCZOS)
+        self.tk_img = ImageTk.PhotoImage(img_resized)
 
-        # Preço
-        price_y = y + 230
-        draw.rectangle([x + 10, price_y, x + CARD_W - 10, price_y + 42], fill=COLOR_DARK_GREEN)
-        centralizar_texto(draw, "PREÇO", font_label, x, price_y + 4, CARD_W, TEXT_WHITE)
-        txt_preco = f"R$ {prod.get('preco','0,00')}"
-        centralizar_texto(draw, txt_preco, font_price, x, price_y + 18, CARD_W, TEXT_WHITE)
+        self.canvas.create_image(500, 330, image=self.tk_img, anchor="center")
 
-    # --- RODAPÉ ---
-    footer_y = img_h - FOOTER_H
-    draw.rectangle([0, footer_y, img_w, img_h], fill=COLOR_DARK_GREEN)
+    def abrir_whatsapp(self):
+        if not self.num_whats:
+            messagebox.showwarning("WhatsApp", "Nenhum número de telefone válido encontrado no arquivo!")
+            return
 
-    txt_rodape = meta['rodape'] if meta['rodape'] else "Entre em contato"
-    txt_fone = meta['fone']
-    texto_completo = f"{txt_rodape} | Fone/Whats: {txt_fone}" if txt_fone else txt_rodape
+        mensagem = f"Olá! Segue nosso {self.meta.get('titulo', 'Encarte de Ofertas')}."
+        msg_encoded = urllib.parse.quote(mensagem)
+        url = f"https://api.whatsapp.com/send?phone={self.num_whats}&text={msg_encoded}"
+        webbrowser.open(url)
 
-    # Calcula largura para posicionar a frase e o ícone centralizados juntos
-    bbox_f = font_footer.getbbox(texto_completo)
-    w_texto = bbox_f[2] - bbox_f[0]
-
-    path_whats = resolver_caminho_foto(meta['logo_fone'])
-    ico_w = None
-    if path_whats:
-        try:
-            ico_w = Image.open(path_whats).convert('RGBA')
-            ico_w.thumbnail((26, 26), Image.Resampling.LANCZOS)
-        except:
-            ico_w = None
-
-    espaço_icone = 34 if ico_w else 0
-    largura_total_bloco = w_texto + espaço_icone
-    start_x = (img_w - largura_total_bloco) // 2
-
-    # Desenha o texto
-    draw.text((start_x, footer_y + 17), texto_completo, fill=TEXT_WHITE, font=font_footer)
-
-    # Cole o ícone logo ao lado do telefone
-    if ico_w:
-        icon_x = start_x + w_texto + 8
-        icon_y = footer_y + 17 + (bbox_f[3] - bbox_f[1] - ico_w.height) // 2
-        canvas.paste(ico_w, (icon_x, icon_y), ico_w)
-
-    canvas.save(output_jpg, "JPEG", quality=92)
+    def abrir_pasta(self):
+        if os.path.exists(self.jpg_path):
+            os.system(f'explorer /select,"{os.path.abspath(self.jpg_path)}"')
 
 if __name__ == "__main__":
-    if len(sys.argv) > 2:
-        gerar_jpeg(sys.argv[1], sys.argv[2])
+    csv_file = sys.argv[1] if len(sys.argv) > 1 else "C:\\TESTE\\DADOS_CATALOGO.CSV"
+    jpg_file = sys.argv[2] if len(sys.argv) > 2 else "C:\\TESTE\\CATALOGO_OESTE_PHARMA.JPG"
+
+    root = tk.Tk()
+    app = AppVisualizador(root, csv_file, jpg_file)
+    root.mainloop()
