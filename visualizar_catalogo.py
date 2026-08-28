@@ -1,6 +1,5 @@
 import sys
 import os
-import csv
 import webbrowser
 import urllib.parse
 import tkinter as tk
@@ -8,24 +7,23 @@ from tkinter import messagebox
 from PIL import Image, ImageTk
 
 def ler_metadados_csv(csv_path):
-    meta = {'fone': '', 'rodape': '', 'titulo': ''}
+    meta = {'fone': '', 'rodape': '', 'titulo': '', 'saida_jpg': ''}
     if not os.path.exists(csv_path):
         return meta
 
-    with open(csv_path, mode='r', encoding='latin-1') as f:
-        linhas = [line.strip() for line in f if line.strip()]
+    try:
+        with open(csv_path, mode='r', encoding='latin-1') as f:
+            linhas = [line.strip() for line in f if line.strip()]
+    except:
+        return meta
 
     for linha in linhas:
         colunas = linha.split(';')
         col0 = colunas[0].lower().strip()
         if col0 in ['codigo', 'fco', 'code']:
             break
-        if col0 == 'fone':
-            meta['fone'] = colunas[1].strip()
-        elif col0 in ['rodape', 'contato']:
-            meta['rodape'] = colunas[1].strip()
-        elif col0 == 'titulo':
-            meta['titulo'] = colunas[1].strip()
+        if len(colunas) > 1:
+            meta[col0] = colunas[1].strip()
             
     return meta
 
@@ -38,12 +36,19 @@ def limpar_numero_whatsapp(fone_raw):
     return apenas_numeros
 
 class AppVisualizador:
-    def __init__(self, root, csv_path, jpg_path):
+    def __init__(self, root, csv_path):
         self.root = root
         self.csv_path = csv_path
-        self.jpg_path = jpg_path
-
         self.meta = ler_metadados_csv(csv_path)
+        
+        # Pega o JPG indicado no CSV ou fallback para Downloads do usuario
+        self.jpg_path = self.meta.get('saida_jpg', '')
+        if not self.jpg_path and len(sys.argv) > 2:
+            self.jpg_path = sys.argv[2]
+        if not self.jpg_path:
+            user_profile = os.environ.get('USERPROFILE', 'C:\\')
+            self.jpg_path = os.path.join(user_profile, 'Downloads', 'CATALOGO_OESTE_PHARMA.JPG')
+
         self.num_whats = limpar_numero_whatsapp(self.meta.get('fone', ''))
 
         self.root.title("Visualizador de Encarte - Oeste Pharma")
@@ -57,7 +62,6 @@ class AppVisualizador:
         lbl_titulo = tk.Label(frame_topo, text="Encarte Gerado com Sucesso!", font=("Arial", 14, "bold"), fg="white", bg="#22702C")
         lbl_titulo.pack(side="left", padx=15)
 
-        # Botao WhatsApp
         btn_whats = tk.Button(
             frame_topo, 
             text="📱 Abrir WhatsApp", 
@@ -70,7 +74,6 @@ class AppVisualizador:
         )
         btn_whats.pack(side="right", padx=15)
 
-        # Botao Abrir Pasta
         btn_pasta = tk.Button(
             frame_topo, 
             text="📁 Abrir Pasta", 
@@ -89,7 +92,7 @@ class AppVisualizador:
         if os.path.exists(self.jpg_path):
             self.carregar_imagem()
         else:
-            self.canvas.create_text(500, 350, text="Arquivo JPG não encontrado!", fill="white", font=("Arial", 16))
+            self.canvas.create_text(500, 350, text=f"Arquivo JPG não encontrado em:\n{self.jpg_path}", fill="white", font=("Arial", 14), justify="center")
 
     def carregar_imagem(self):
         self.pil_img = Image.open(self.jpg_path)
@@ -106,7 +109,7 @@ class AppVisualizador:
 
     def abrir_whatsapp(self):
         if not self.num_whats:
-            messagebox.showwarning("WhatsApp", "Nenhum número de telefone válido encontrado no arquivo!")
+            messagebox.showwarning("WhatsApp", "Nenhum número de telefone válido encontrado!")
             return
 
         mensagem = f"Olá! Segue nosso {self.meta.get('titulo', 'Encarte de Ofertas')}."
@@ -119,9 +122,8 @@ class AppVisualizador:
             os.system(f'explorer /select,"{os.path.abspath(self.jpg_path)}"')
 
 if __name__ == "__main__":
-    csv_file = sys.argv[1] if len(sys.argv) > 1 else "C:\\TESTE\\DADOS_CATALOGO.CSV"
-    jpg_file = sys.argv[2] if len(sys.argv) > 2 else "C:\\TESTE\\CATALOGO_OESTE_PHARMA.JPG"
+    csv_file = sys.argv[1] if len(sys.argv) > 1 else "F:\\UNICO\\ENCARTE\\DADOS_CATALOGO.CSV"
 
     root = tk.Tk()
-    app = AppVisualizador(root, csv_file, jpg_file)
+    app = AppVisualizador(root, csv_file)
     root.mainloop()
