@@ -20,16 +20,10 @@ def ler_metadados_csv(csv_path):
     for linha in linhas:
         colunas = linha.split(';')
         col0 = colunas[0].lower().strip()
-        
         if col0 in ['codigo', 'fco', 'code']:
             break
-            
         if len(colunas) > 1:
-            val = colunas[1].strip()
-            # Se a linha colou com o cabeçalho 'codigo;...', limpa o excesso
-            if 'codigo;' in val.lower():
-                val = val.lower().split('codigo;')[0].strip()
-            meta[col0] = val
+            meta[col0] = colunas[1].strip()
             
     return meta
 
@@ -47,9 +41,6 @@ class AppVisualizador:
         self.csv_path = csv_path
         self.meta = ler_metadados_csv(csv_path)
         
-        # 1. Tenta o caminho vindo da linha de comando
-        # 2. Tenta a chave 'saida_jpg' tratada do CSV
-        # 3. Fallback para Downloads do usuario
         self.jpg_path = ""
         if len(sys.argv) > 2 and sys.argv[2].strip():
             self.jpg_path = sys.argv[2].strip()
@@ -69,13 +60,15 @@ class AppVisualizador:
         self.root.attributes('-topmost', True)
         self.root.after_idle(self.root.attributes, '-topmost', False)
 
-        # Tela de aviso informando o caminho exato
-        existe = "SIM" if os.path.exists(self.jpg_path) else "NÃO"
+        # MENSAGEM POP-UP MOSTRANDO DIRETÓRIO E ARQUIVO
+        diretorio, nome_arquivo = os.path.split(os.path.abspath(self.jpg_path))
+        existe = "ENCONTRADO" if os.path.exists(self.jpg_path) else "NÃO ENCONTRADO"
+        
         messagebox.showinfo(
-            "Caminho do Arquivo",
-            f"CSV: {self.csv_path}\n\n"
-            f"Imagem lida:\n{self.jpg_path}\n\n"
-            f"Arquivo existe no disco? {existe}"
+            "Abrindo Arquivo",
+            f"Diretório:\n{diretorio}\n\n"
+            f"Arquivo:\n{nome_arquivo}\n\n"
+            f"Status do Arquivo: {existe}"
         )
 
         # PAINEL SUPERIOR
