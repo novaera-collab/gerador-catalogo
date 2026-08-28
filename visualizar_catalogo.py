@@ -41,10 +41,16 @@ class AppVisualizador:
         self.csv_path = csv_path
         self.meta = ler_metadados_csv(csv_path)
         
-        self.jpg_path = self.meta.get('saida_jpg', '')
-        if not self.jpg_path and len(sys.argv) > 2:
-            self.jpg_path = sys.argv[2]
-        if not self.jpg_path:
+        # Ordem de busca da imagem JPG:
+        # 1. Segundo parâmetro via CLI (Arq_Jpg)
+        # 2. Caminho registrado no cabeçalho do CSV
+        # 3. Downloads do Usuário
+        self.jpg_path = ""
+        if len(sys.argv) > 2 and sys.argv[2].strip():
+            self.jpg_path = sys.argv[2].strip()
+        elif self.meta.get('saida_jpg'):
+            self.jpg_path = self.meta.get('saida_jpg')
+        else:
             user_profile = os.environ.get('USERPROFILE', 'C:\\')
             self.jpg_path = os.path.join(user_profile, 'Downloads', 'CATALOGO_OESTE_PHARMA.JPG')
 
@@ -54,12 +60,11 @@ class AppVisualizador:
         self.root.geometry("1000x750")
         self.root.configure(bg="#f0f0f0")
         
-        # Garante foco na janela do visualizador sem prender o ERP
         self.root.lift()
         self.root.attributes('-topmost', True)
         self.root.after_idle(self.root.attributes, '-topmost', False)
 
-        # --- PAINEL SUPERIOR ---
+        # PAINEL SUPERIOR
         frame_topo = tk.Frame(self.root, bg="#22702C")
         frame_topo.pack(fill="x", side="top", ipady=10)
 
@@ -89,7 +94,7 @@ class AppVisualizador:
         )
         btn_pasta.pack(side="right", padx=5)
 
-        # --- PAINEL CENTRAL ---
+        # PAINEL CENTRAL
         self.canvas = tk.Canvas(self.root, bg="#333333")
         self.canvas.pack(fill="both", expand=True)
 
