@@ -4,17 +4,14 @@ import os
 from PIL import Image, ImageDraw, ImageFont
 
 def resolver_caminho_foto(foto_raw):
-    """Trata o caminho da foto na rede mesmo se faltar extensão"""
     foto_path = foto_raw.strip()
     if not foto_path:
         return None
     
-    # Se o arquivo existe como informado
     if os.path.exists(foto_path):
         return foto_path
 
-    # Tenta extensões comuns se o caminho veio sem extensão
-    extensoes = ['.jpg', '.JPG', '.jpeg', '.JPEG', '.png', '.PNG']
+    extensoes = ['.jpg', '.JPG', '.jpeg', '.JPEG', '.png', '.PNG', '.bmp', '.BMP']
     for ext in extensoes:
         caminho_teste = foto_path + ext
         if os.path.exists(caminho_teste):
@@ -22,44 +19,77 @@ def resolver_caminho_foto(foto_raw):
 
     return None
 
+def centralizar_texto(draw, text, font, x_start, y_start, width, fill_color):
+    bbox = font.getbbox(text)
+    text_w = bbox[2] - bbox[0]
+    x = x_start + (width - text_w) // 2
+    draw.text((x, y_start), text, fill=fill_color, font=font)
+
 def gerar_jpeg(csv_path, output_jpg):
     if not os.path.exists(csv_path):
         return
 
-    # Configurações do Grid de Layout
     CARD_W, CARD_H = 300, 320
     COLS = 4
     MARGIN = 20
     PADDING = 10
-    IMG_SIZE = (220, 180)
+    HEADER_H = 80
+    FOOTER_H = 60
+    IMG_SIZE = (200, 160)
 
-    BG_COLOR = (255, 255, 255)
+    # Cores Oeste Pharma
+    COLOR_DARK_GREEN = (34, 112, 44)
+    COLOR_LIGHT_GREEN = (228, 243, 227)
+    BG_COLOR = (245, 245, 245)
     CARD_BG = (255, 255, 255)
     CARD_BORDER = (220, 220, 220)
-    TEXT_COLOR = (30, 30, 30)
-    PRICE_BG = (46, 125, 50)
-    PRICE_TEXT = (255, 255, 255)
+    TEXT_DARK = (20, 20, 20)
+    TEXT_WHITE = (255, 255, 255)
 
     try:
-        font_title = ImageFont.truetype("arial.ttf", 14)
-        font_code = ImageFont.truetype("arialbd.ttf", 12)
-        font_price = ImageFont.truetype("arialbd.ttf", 16)
+        font_header_title = ImageFont.truetype("arialbd.ttf", 18)
+        font_header_sub = ImageFont.truetype("arial.ttf", 12)
+        font_code = ImageFont.truetype("arialbd.ttf", 11)
+        font_title = ImageFont.truetype("arialbd.ttf", 12)
+        font_label = ImageFont.truetype("arialbd.ttf", 10)
+        font_price = ImageFont.truetype("arialbd.ttf", 18)
+        font_footer = ImageFont.truetype("arialbd.ttf", 16)
     except:
-        font_title = font_code = font_price = ImageFont.load_default()
+        font_header_title = font_header_sub = font_code = font_title = font_label = font_price = font_footer = ImageFont.load_default()
+
+    # Leitura e Metadados do CSV
+    meta = {
+        'titulo': 'ENCARTE DE PRODUTOS SUJEITO A ALTERAÇÕES DE PREÇOS',
+        'logo': r'f:\unico\logo\oeste.jpg',
+        'logo_fone': r'f:\unico\logo\ico-whats.bmp',
+        'rodape': '',
+        'fone': ''
+    }
 
     produtos = []
-    
-    # Leitura tolerante do CSV (com ou sem cabeçalho)
     with open(csv_path, mode='r', encoding='latin-1') as f:
         linhas = [line.strip() for line in f if line.strip()]
-        
+
+    is_produtos = False
     for linha in linhas:
         colunas = linha.split(';')
-        if len(colunas) >= 5:
-            # Ignora linha se for o cabeçalho
-            if colunas[0].lower() in ['codigo', 'fco', 'code']:
-                continue
-            
+        col0 = colunas[0].lower().strip()
+
+        # Identifica a transição de Metadados para os Produtos
+        if col0 in ['codigo', 'fco', 'code']:
+            is_produtos = True
+            continue
+
+        if not is_produtos:
+            if col0 == 'titulo': meta['titulo'] = colunas[1].strip()
+            elif col0 in ['logo', 'logo_empresa']: meta['logo'] = colunas[1].strip()
+            elif col0 in ['logo_fone', 'logo_whats']: meta['logo_fone'] = colunas[1].strip()
+            elif col0 in ['rodape', 'contato']: meta['rodape'] = colunas[1].strip()
+            elif col0 == 'fone': meta['fone'] = colunas[1].strip()
+            elif len(colunas) >= 5: # CSV sem linha de cabeçalho 'codigo'
+                is_produtos = True
+
+        if is_produtos and len(colunas) >= 5:
             produtos.append({
                 'codigo': colunas[0].strip(),
                 'descricao': colunas[1].strip(),
@@ -73,53 +103,98 @@ def gerar_jpeg(csv_path, output_jpg):
 
     total_prods = len(produtos)
     rows = (total_prods + COLS - 1) // COLS
-    
+
     img_w = (COLS * CARD_W) + ((COLS + 1) * MARGIN)
-    img_h = (rows * CARD_H) + ((rows + 1) * MARGIN)
+    grid_h = (rows * CARD_H) + ((rows + 1) * MARGIN)
+    img_h = HEADER_H + grid_h + FOOTER_H
 
     canvas = Image.new('RGB', (img_w, img_h), BG_COLOR)
     draw = ImageDraw.Draw(canvas)
+
+    # --- CABEÇALHO ---
+    draw.rectangle([0, 0, img_w, HEADER_H], fill=COLOR_DARK_GREEN)
+
+    # Logo da Empresa
+    path_logo = resolver_caminho_foto(meta['logo'])
+    if path_logo:
+        try:
+            logo = Image.open(path_logo).convert('RGBA')
+            logo.thumbnail((180, 60), Image.Resampling.LANCZOS)
+            canvas.paste(logo, (MARGIN, (HEADER_H - logo.height) // 2), logo)
+        except:
+            draw.text((MARGIN, 25), "Oeste Pharma", fill=TEXT_WHITE, font=font_header_title)
+    else:
+        draw.text((MARGIN, 25), "Oeste Pharma", fill=TEXT_WHITE, font=font_header_title)
+
+    # Título do Encarte
+    txt_titulo = meta['titulo']
+    draw.text((img_w - 550, 22), txt_titulo, fill=TEXT_WHITE, font=font_header_title)
+    draw.text((img_w - 220, 48), "www.oestepharma.com.br", fill=TEXT_WHITE, font=font_header_sub)
+
+    # --- CARDS DE PRODUTOS ---
+    start_y = HEADER_H + MARGIN
 
     for idx, prod in enumerate(produtos):
         col = idx % COLS
         row = idx // COLS
 
         x = MARGIN + col * (CARD_W + MARGIN)
-        y = MARGIN + row * (CARD_H + MARGIN)
+        y = start_y + row * (CARD_H + MARGIN)
 
         draw.rectangle([x, y, x + CARD_W, y + CARD_H], fill=CARD_BG, outline=CARD_BORDER, width=2)
 
         foto_path = resolver_caminho_foto(prod.get('foto', ''))
-        img_obj = None
-
         if foto_path:
             try:
                 img_obj = Image.open(foto_path).convert('RGB')
+                img_obj.thumbnail(IMG_SIZE, Image.Resampling.LANCZOS)
+                img_x = x + (CARD_W - img_obj.width) // 2
+                img_y = y + 10 + (IMG_SIZE[1] - img_obj.height) // 2
+                canvas.paste(img_obj, (img_x, img_y))
             except:
-                img_obj = None
-
-        if img_obj:
-            img_obj.thumbnail(IMG_SIZE, Image.Resampling.LANCZOS)
-            img_x = x + (CARD_W - img_obj.width) // 2
-            img_y = y + PADDING + (IMG_SIZE[1] - img_obj.height) // 2
-            canvas.paste(img_obj, (img_x, img_y))
+                draw.rectangle([x + 50, y + 20, x + CARD_W - 50, y + 150], outline=(220,220,220))
+                centralizar_texto(draw, "SEM FOTO", font_code, x, y + 85, CARD_W, (150,150,150))
         else:
-            draw.rectangle([x + 40, y + 20, x + CARD_W - 40, y + 160], outline=(200,200,200))
-            draw.text((x + 85, y + 80), "SEM FOTO", fill=(150,150,150), font=font_code)
+            draw.rectangle([x + 50, y + 20, x + CARD_W - 50, y + 150], outline=(220,220,220))
+            centralizar_texto(draw, "SEM FOTO", font_code, x, y + 85, CARD_W, (150,150,150))
 
-        txt_cod = f"COD: {prod.get('codigo','')} - {prod.get('marca','')}"[:32]
-        draw.text((x + PADDING, y + 195), txt_cod, fill=(100,100,100), font=font_code)
+        # Faixa Código
+        draw.rectangle([x + 10, y + 175, x + CARD_W - 10, y + 195], fill=COLOR_LIGHT_GREEN)
+        txt_cod = f"COD: {prod.get('codigo','')} - {prod.get('marca','')}"[:36]
+        centralizar_texto(draw, txt_cod, font_code, x, y + 179, CARD_W, COLOR_DARK_GREEN)
 
-        txt_desc = prod.get('descricao','')[:35]
-        draw.text((x + PADDING, y + 215), txt_desc, fill=TEXT_COLOR, font=font_title)
+        # Descrição
+        txt_desc = prod.get('descricao','')[:38]
+        centralizar_texto(draw, txt_desc, font_title, x, y + 202, CARD_W, TEXT_DARK)
 
-        preco_y = y + CARD_H - 45
-        draw.rectangle([x + PADDING, preco_y, x + CARD_W - PADDING, preco_y + 35], fill=PRICE_BG)
-        
+        # Preço
+        price_y = y + 230
+        draw.rectangle([x + 10, price_y, x + CARD_W - 10, price_y + 42], fill=COLOR_DARK_GREEN)
+        centralizar_texto(draw, "PREÇO", font_label, x, price_y + 4, CARD_W, TEXT_WHITE)
         txt_preco = f"R$ {prod.get('preco','0,00')}"
-        draw.text((x + PADDING + 10, preco_y + 7), txt_preco, fill=PRICE_TEXT, font=font_price)
+        centralizar_texto(draw, txt_preco, font_price, x, price_y + 18, CARD_W, TEXT_WHITE)
 
-    canvas.save(output_jpg, "JPEG", quality=90)
+    # --- RODAPÉ ---
+    footer_y = img_h - FOOTER_H
+    draw.rectangle([0, footer_y, img_w, img_h], fill=COLOR_DARK_GREEN)
+
+    txt_rodape = meta['rodape'] if meta['rodape'] else "Entre em contato conosco"
+    txt_fone = meta['fone']
+
+    texto_completo = f"{txt_rodape}  |  Fone/Whats: {txt_fone}" if txt_fone else txt_rodape
+    centralizar_texto(draw, texto_completo, font_footer, 0, footer_y + 18, img_w, TEXT_WHITE)
+
+    # Ícone do Whats
+    path_whats = resolver_caminho_foto(meta['logo_fone'])
+    if path_whats:
+        try:
+            ico_w = Image.open(path_whats).convert('RGBA')
+            ico_w.thumbnail((30, 30), Image.Resampling.LANCZOS)
+            canvas.paste(ico_w, (img_w - 100, footer_y + 15), ico_w)
+        except:
+            pass
+
+    canvas.save(output_jpg, "JPEG", quality=92)
 
 if __name__ == "__main__":
     if len(sys.argv) > 2:
