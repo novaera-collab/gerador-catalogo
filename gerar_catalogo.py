@@ -1,127 +1,140 @@
 import sys
 import os
 import csv
-import webbrowser
-import urllib.parse
-import tkinter as tk
-from tkinter import messagebox
-from PIL import Image, ImageTk
+import traceback
+from PIL import Image, ImageDraw, ImageFont
 
-def ler_metadados_csv(csv_path):
-    meta = {'fone': '', 'rodape': '', 'titulo': ''}
-    if not os.path.exists(csv_path):
-        return meta
+def log_erro(mensagem):
+    try:
+        with open("erro_gerador.log", "a", encoding="utf-8") as f:
+            f.write(mensagem + "\n")
+    except:
+        pass
 
-    with open(csv_path, mode='r', encoding='latin-1') as f:
-        linhas = [line.strip() for line in f if line.strip()]
-
-    for linha in linhas:
-        colunas = linha.split(';')
-        col0 = colunas[0].lower().strip()
-        if col0 in ['codigo', 'fco', 'code']:
-            break
-        if col0 == 'fone':
-            meta['fone'] = colunas[1].strip()
-        elif col0 in ['rodape', 'contato']:
-            meta['rodape'] = colunas[1].strip()
-        elif col0 == 'titulo':
-            meta['titulo'] = colunas[1].strip()
-            
-    return meta
-
-def limpar_numero_whatsapp(fone_raw):
-    apenas_numeros = "".join(c for c in fone_raw if c.isdigit())
-    if not apenas_numeros:
-        return ""
-    if len(apenas_numeros) in [10, 11]:
-        return "55" + apenas_numeros
-    return apenas_numeros
-
-class AppVisualizador:
-    def __init__(self, root, csv_path, jpg_path):
-        self.root = root
-        self.csv_path = csv_path
-        self.jpg_path = jpg_path
-
-        self.meta = ler_metadados_csv(csv_path)
-        self.num_whats = limpar_numero_whatsapp(self.meta.get('fone', ''))
-
-        self.root.title("Visualizador de Encarte - Oeste Pharma")
-        self.root.geometry("1000x750")
-        self.root.configure(bg="#f0f0f0")
-
-        # --- PAINEL SUPERIOR ---
-        frame_topo = tk.Frame(self.root, bg="#22702C")
-        frame_topo.pack(fill="x", side="top", ipady=10)
-
-        lbl_titulo = tk.Label(frame_topo, text="Encarte Gerado com Sucesso!", font=("Arial", 14, "bold"), fg="white", bg="#22702C")
-        lbl_titulo.pack(side="left", padx=15)
-
-        # Botao WhatsApp
-        btn_whats = tk.Button(
-            frame_topo, 
-            text="📱 Abrir WhatsApp", 
-            font=("Arial", 11, "bold"), 
-            bg="#25D366", 
-            fg="white", 
-            activebackground="#1EBE5D",
-            cursor="hand2",
-            command=self.abrir_whatsapp
-        )
-        btn_whats.pack(side="right", padx=15)
-
-        # Botao Abrir Pasta
-        btn_pasta = tk.Button(
-            frame_topo, 
-            text="📁 Abrir Pasta", 
-            font=("Arial", 11), 
-            bg="#ffffff", 
-            fg="#333333", 
-            cursor="hand2",
-            command=self.abrir_pasta
-        )
-        btn_pasta.pack(side="right", padx=5)
-
-        # --- PAINEL CENTRAL ---
-        self.canvas = tk.Canvas(self.root, bg="#333333")
-        self.canvas.pack(fill="both", expand=True)
-
-        if os.path.exists(self.jpg_path):
-            self.carregar_imagem()
-        else:
-            self.canvas.create_text(500, 350, text="Arquivo JPG não encontrado!", fill="white", font=("Arial", 16))
-
-    def carregar_imagem(self):
-        self.pil_img = Image.open(self.jpg_path)
+def gerar():
+    try:
+        csv_path = sys.argv[1] if len(sys.argv) > 1 else "F:\\UNICO\\ENCARTE\\DADOS_CATALOGO.CSV"
         
-        img_w, img_h = self.pil_img.size
-        max_w, max_h = 960, 640
-        ratio = min(max_w/img_w, max_h/img_h)
-        novo_tamanho = (int(img_w * ratio), int(img_h * ratio))
-
-        img_resized = self.pil_img.resize(novo_tamanho, Image.Resampling.LANCZOS)
-        self.tk_img = ImageTk.PhotoImage(img_resized)
-
-        self.canvas.create_image(500, 330, image=self.tk_img, anchor="center")
-
-    def abrir_whatsapp(self):
-        if not self.num_whats:
-            messagebox.showwarning("WhatsApp", "Nenhum número de telefone válido encontrado no arquivo!")
+        if not os.path.exists(csv_path):
+            log_erro(f"Arquivo CSV nao encontrado: {csv_path}")
             return
 
-        mensagem = f"Olá! Segue nosso {self.meta.get('titulo', 'Encarte de Ofertas')}."
-        msg_encoded = urllib.parse.quote(mensagem)
-        url = f"https://api.whatsapp.com/send?phone={self.num_whats}&text={msg_encoded}"
-        webbrowser.open(url)
+        # Ler metadados e produtos
+        metadados = {}
+        produtos = []
 
-    def abrir_pasta(self):
-        if os.path.exists(self.jpg_path):
-            os.system(f'explorer /select,"{os.path.abspath(self.jpg_path)}"')
+        linhas = []
+        try:
+            with open(csv_path, mode='r', encoding='latin-1') as f:
+                linhas = [l.strip() for l in f if l.strip()]
+        except:
+            with open(csv_path, mode='r', encoding='utf-8') as f:
+                linhas = [l.strip() for l in f if l.strip()]
+
+        lendo_produtos = False
+        headers = []
+
+        for linha in linhas:
+            colunas = [c.strip() for c in linha.split(';')]
+            if not colunas:
+                continue
+
+            col0 = colunas[0].lower()
+            if col0 in ['codigo', 'fco', 'code']:
+                lendo_produtos = True
+                headers = [c.lower() for c in colunas]
+                continue
+
+            if not lendo_produtos:
+                if len(colunas) >= 2:
+                    metadados[col0] = colunas[1]
+            else:
+                prod = {}
+                for idx, val in enumerate(colunas):
+                    if idx < len(headers):
+                        prod[headers[idx]] = val
+                produtos.append(prod)
+
+        # Define caminho do JPG (veio no CSV ou usa fallback para 2º argumento ou Downloads)
+        jpg_out_path = metadados.get('saida_jpg', '')
+        if not jpg_out_path and len(sys.argv) > 2:
+            jpg_out_path = sys.argv[2]
+        if not jpg_out_path:
+            user_profile = os.environ.get('USERPROFILE', 'C:\\')
+            jpg_out_path = os.path.join(user_profile, 'Downloads', 'CATALOGO_OESTE_PHARMA.JPG')
+
+        # Garantir pasta de destino
+        out_dir = os.path.dirname(jpg_out_path)
+        if out_dir and not os.path.exists(out_dir):
+            os.makedirs(out_dir, exist_ok=True)
+
+        # Dimensões da Imagem
+        W, H = 1200, 1600
+        img = Image.new('RGB', (W, H), color='#FFFFFF')
+        draw = ImageDraw.Draw(img)
+
+        # Cabeçalho Verde
+        draw.rectangle([(0, 0), (W, 180)], fill='#22702C')
+        
+        titulo = metadados.get('titulo', 'OESTE PHARMA - OFERTAS')
+        fone = metadados.get('fone', '')
+        rodape = metadados.get('rodape', '')
+
+        try:
+            font_titulo = ImageFont.truetype("arial.ttf", 48)
+            font_sub = ImageFont.truetype("arial.ttf", 28)
+            font_prod = ImageFont.truetype("arial.ttf", 22)
+            font_preco = ImageFont.truetype("arial.ttf", 36)
+        except:
+            font_titulo = font_sub = font_prod = font_preco = ImageFont.load_default()
+
+        draw.text((40, 40), titulo, fill='white', font=font_titulo)
+        if fone:
+            draw.text((40, 110), f"Contato: {fone}", fill='#E0E0E0', font=font_sub)
+
+        # Grade de Produtos
+        cols = 3
+        margin_x = 40
+        start_y = 220
+        box_w = 360
+        box_h = 320
+        gap_x = 20
+        gap_y = 20
+
+        for i, p in enumerate(produtos[:12]):
+            r = i // cols
+            c = i % cols
+            x = margin_x + c * (box_w + gap_x)
+            y = start_y + r * (box_h + gap_y)
+
+            draw.rectangle([(x, y), (x + box_w, y + box_h)], outline='#DDDDDD', width=2, fill='#FAFAFA')
+
+            desc = p.get('descricao', p.get('nome', 'Produto'))
+            preco = p.get('preco', p.get('valor', '0,00'))
+
+            draw.text((x + 15, y + 15), desc[:25], fill='#333333', font=font_prod)
+            
+            img_p_path = p.get('imagem', p.get('foto', ''))
+            if img_p_path and os.path.exists(img_p_path):
+                try:
+                    p_img = Image.open(img_p_path).convert("RGBA")
+                    p_img.thumbnail((180, 180))
+                    img.paste(p_img, (x + 90, y + 60), p_img)
+                except:
+                    pass
+
+            draw.rectangle([(x + 20, y + box_h - 70), (x + box_w - 20, y + box_h - 15)], fill='#22702C')
+            draw.text((x + 40, y + box_h - 65), f"R$ {preco}", fill='white', font=font_preco)
+
+        # Rodapé Verde
+        draw.rectangle([(0, H - 80), (W, H)], fill='#22702C')
+        if rodape:
+            draw.text((40, H - 55), rodape, fill='white', font=font_sub)
+
+        img.save(jpg_out_path, "JPEG", quality=90)
+
+    except Exception as e:
+        log_erro(traceback.format_exc())
 
 if __name__ == "__main__":
-    csv_file = sys.argv[1] if len(sys.argv) > 1 else "C:\\TESTE\\DADOS_CATALOGO.CSV"
-    jpg_file = sys.argv[2] if len(sys.argv) > 2 else "C:\\TESTE\\CATALOGO_OESTE_PHARMA.JPG"
-
-    root = tk.Tk()
-    app = AppVisualizador(root, csv_file, jpg_file)
-    root.mainloop()
+    gerar()
