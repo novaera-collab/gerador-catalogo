@@ -16,14 +16,12 @@ def gerar():
         csv_path = sys.argv[1] if len(sys.argv) > 1 else "F:\\UNICO\\ENCARTE\\DADOS_CATALOGO.CSV"
         
         if not os.path.exists(csv_path):
-            log_erro(f"Arquivo CSV nao encontrado: {csv_path}")
+            log_erro(f"CSV nao encontrado: {csv_path}")
             return
 
-        # Ler metadados e produtos
         metadados = {}
         produtos = []
 
-        linhas = []
         try:
             with open(csv_path, mode='r', encoding='latin-1') as f:
                 linhas = [l.strip() for l in f if l.strip()]
@@ -55,7 +53,6 @@ def gerar():
                         prod[headers[idx]] = val
                 produtos.append(prod)
 
-        # Define caminho do JPG (veio no CSV ou usa fallback para 2º argumento ou Downloads)
         jpg_out_path = metadados.get('saida_jpg', '')
         if not jpg_out_path and len(sys.argv) > 2:
             jpg_out_path = sys.argv[2]
@@ -63,75 +60,96 @@ def gerar():
             user_profile = os.environ.get('USERPROFILE', 'C:\\')
             jpg_out_path = os.path.join(user_profile, 'Downloads', 'CATALOGO_OESTE_PHARMA.JPG')
 
-        # Garantir pasta de destino
         out_dir = os.path.dirname(jpg_out_path)
         if out_dir and not os.path.exists(out_dir):
             os.makedirs(out_dir, exist_ok=True)
 
-        # Dimensões da Imagem
-        W, H = 1200, 1600
+        # Resolução HD Vertical para WhatsApp (1080 x 1920)
+        W, H = 1080, 1920
         img = Image.new('RGB', (W, H), color='#FFFFFF')
         draw = ImageDraw.Draw(img)
 
-        # Cabeçalho Verde
+        # Carregar Fontes
+        try:
+            font_titulo = ImageFont.truetype("arialbd.ttf", 46)
+            font_sub = ImageFont.truetype("arial.ttf", 26)
+            font_prod = ImageFont.truetype("arialbd.ttf", 24)
+            font_rs = ImageFont.truetype("arialbd.ttf", 22)
+            font_preco = ImageFont.truetype("arialbd.ttf", 44)
+        except:
+            font_titulo = font_sub = font_prod = font_rs = font_preco = ImageFont.load_default()
+
+        # Header Verde Superior
         draw.rectangle([(0, 0), (W, 180)], fill='#22702C')
-        
         titulo = metadados.get('titulo', 'OESTE PHARMA - OFERTAS')
         fone = metadados.get('fone', '')
         rodape = metadados.get('rodape', '')
 
-        try:
-            font_titulo = ImageFont.truetype("arial.ttf", 48)
-            font_sub = ImageFont.truetype("arial.ttf", 28)
-            font_prod = ImageFont.truetype("arial.ttf", 22)
-            font_preco = ImageFont.truetype("arial.ttf", 36)
-        except:
-            font_titulo = font_sub = font_prod = font_preco = ImageFont.load_default()
-
-        draw.text((40, 40), titulo, fill='white', font=font_titulo)
+        draw.text((40, 35), titulo.upper(), fill='white', font=font_titulo)
         if fone:
-            draw.text((40, 110), f"Contato: {fone}", fill='#E0E0E0', font=font_sub)
+            draw.text((40, 115), f"WhatsApp: {fone}", fill='#E0E0E0', font=font_sub)
 
-        # Grade de Produtos
-        cols = 3
-        margin_x = 40
-        start_y = 220
-        box_w = 360
-        box_h = 320
-        gap_x = 20
-        gap_y = 20
+        # Layout Mobile: Grid 2 Colunas x 4 Linhas (8 produtos de destaque)
+        cols = 2
+        margin_x = 35
+        start_y = 210
+        box_w = 485
+        box_h = 380
+        gap_x = 40
+        gap_y = 25
 
-        for i, p in enumerate(produtos[:12]):
+        for i, p in enumerate(produtos[:8]):
             r = i // cols
             c = i % cols
             x = margin_x + c * (box_w + gap_x)
             y = start_y + r * (box_h + gap_y)
 
-            draw.rectangle([(x, y), (x + box_w, y + box_h)], outline='#DDDDDD', width=2, fill='#FAFAFA')
+            # Card com linha tracejada / borda suave
+            draw.rectangle([(x, y), (x + box_w, y + box_h)], outline='#CCCCCC', width=2, fill='#FAFAFA')
 
-            desc = p.get('descricao', p.get('nome', 'Produto'))
+            desc = p.get('descricao', p.get('nome', 'PRODUTO')).upper()
             preco = p.get('preco', p.get('valor', '0,00'))
 
-            draw.text((x + 15, y + 15), desc[:25], fill='#333333', font=font_prod)
+            # Nome do Produto (Quebra em 2 linhas)
+            palavras = desc.split()
+            l1, l2 = "", ""
+            for pal in palavras:
+                if len(l1 + " " + pal) <= 24:
+                    l1 += (" " if l1 else "") + pal
+                else:
+                    l2 += (" " if l2 else "") + pal
             
+            draw.text((x + 20, y + 15), l1, fill='#111111', font=font_prod)
+            if l2:
+                draw.text((x + 20, y + 45), l2[:24], fill='#111111', font=font_prod)
+
+            # Imagem do Produto
             img_p_path = p.get('imagem', p.get('foto', ''))
             if img_p_path and os.path.exists(img_p_path):
                 try:
                     p_img = Image.open(img_p_path).convert("RGBA")
-                    p_img.thumbnail((180, 180))
-                    img.paste(p_img, (x + 90, y + 60), p_img)
+                    p_img.thumbnail((230, 210))
+                    img.paste(p_img, (x + 125, y + 85), p_img)
                 except:
                     pass
 
-            draw.rectangle([(x + 20, y + box_h - 70), (x + box_w - 20, y + box_h - 15)], fill='#22702C')
-            draw.text((x + 40, y + box_h - 65), f"R$ {preco}", fill='white', font=font_preco)
+            # Tag Estilo Pílula Verde para o Preço (estilo encarte farmacêutico)
+            badge_x1, badge_y1 = x + 30, y + box_h - 75
+            badge_x2, badge_y2 = x + box_w - 30, y + box_h - 15
+            
+            # Desenha fundo verde arredondado/preenchido
+            draw.rectangle([(badge_x1, badge_y1), (badge_x2, badge_y2)], fill='#25D366')
+            
+            # Formata preço
+            draw.text((badge_x1 + 30, badge_y1 + 15), "R$", fill='white', font=font_rs)
+            draw.text((badge_x1 + 75, badge_y1 + 5), f"{preco}", fill='white', font=font_preco)
 
-        # Rodapé Verde
-        draw.rectangle([(0, H - 80), (W, H)], fill='#22702C')
+        # Rodapé Verde Inferior
+        draw.rectangle([(0, H - 90), (W, H)], fill='#22702C')
         if rodape:
-            draw.text((40, H - 55), rodape, fill='white', font=font_sub)
+            draw.text((40, H - 60), rodape.upper(), fill='white', font=font_sub)
 
-        img.save(jpg_out_path, "JPEG", quality=90)
+        img.save(jpg_out_path, "JPEG", quality=95)
 
     except Exception as e:
         log_erro(traceback.format_exc())
