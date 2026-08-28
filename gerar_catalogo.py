@@ -37,7 +37,7 @@ def gerar():
             if not colunas:
                 continue
 
-            col0 = colunas[0].lower()
+            col0 = colunas[0].lower().replace(':', '')
             if col0 in ['codigo', 'fco', 'code']:
                 lendo_produtos = True
                 headers = [c.lower() for c in colunas]
@@ -66,10 +66,10 @@ def gerar():
         if out_dir and not os.path.exists(out_dir):
             os.makedirs(out_dir, exist_ok=True)
 
-        # CÁLCULO DINÂMICO DA ALTURA (SEM TRAVA DE 8 PRODUTOS)
+        # CÁLCULO DINÂMICO DA ALTURA (SEM LIMITE DE PRODUTOS)
         total_prods = len(produtos)
         cols = 2
-        total_linhas = (total_prods + cols - 1) // cols
+        total_linhas = max((total_prods + cols - 1) // cols, 1)
         
         box_h = 390
         gap_y = 20
@@ -77,7 +77,6 @@ def gerar():
         footer_h = 110
         start_y = 200
 
-        # Calcula a altura final proporcional a quantidade de itens do SQL
         H = start_y + (total_linhas * (box_h + gap_y)) + footer_h
         W = 1080
 
@@ -88,7 +87,7 @@ def gerar():
             font_titulo = ImageFont.truetype("arialbd.ttf", 38)
             font_site = ImageFont.truetype("arial.ttf", 22)
             font_sub = ImageFont.truetype("arialbd.ttf", 24)
-            font_val = ImageFont.truetype("arial.ttf", 20)
+            font_val = ImageFont.truetype("arial.ttf", 18)
             font_prod = ImageFont.truetype("arialbd.ttf", 22)
             font_cod = ImageFont.truetype("arial.ttf", 16)
             font_preco = ImageFont.truetype("arialbd.ttf", 36)
@@ -110,6 +109,9 @@ def gerar():
 
         # Título e Site
         titulo = metadados.get('titulo', 'OESTE PHARMA - ENCARTE DE OFERTAS')
+        if not titulo:
+            titulo = 'OESTE PHARMA - ENCARTE DE OFERTAS'
+            
         draw.text((W - 40, 45), titulo.upper(), fill='white', font=font_titulo, anchor="ra")
         draw.text((W - 40, 105), "www.oestepharma.com.br", fill='#E0E0E0', font=font_site, anchor="ra")
 
@@ -153,7 +155,7 @@ def gerar():
                 except:
                     pass
 
-            # Tarja de Preço (Verde mais escuro #C8E6C9)
+            # Tarja de Preço
             draw.rectangle([(x + 15, y + box_h - 75), (x + box_w - 15, y + box_h - 10)], fill='#C8E6C9')
             
             # Código acima do preço
@@ -170,14 +172,17 @@ def gerar():
         fone_txt = metadados.get('fone', '')
         info_contato = f"Contato: {rodape_txt}  -  {fone_txt}".strip(" -")
         
-        # 1ª Linha do Rodapé: Contato
-        if info_contato:
-            draw.text((W // 2, H - 75), info_contato, fill='white', font=font_sub, anchor="mm")
+        # 1ª Linha do Rodapé: Contato (Se houver)
+        if info_contato and info_contato != "Contato:":
+            draw.text((W // 2, H - 70), info_contato, fill='white', font=font_sub, anchor="mm")
+            pos_y_validade = H - 35
+        else:
+            pos_y_validade = H - 55
 
         # 2ª Linha do Rodapé: Validade (Letras Pequenas)
         validade = metadados.get('validade', '')
         if validade:
-            draw.text((W // 2, H - 35), validade.upper(), fill='#E0E0E0', font=font_val, anchor="mm")
+            draw.text((W // 2, pos_y_validade), validade.upper(), fill='#E0E0E0', font=font_val, anchor="mm")
 
         img.save(jpg_out_path, "JPEG", quality=95)
 
