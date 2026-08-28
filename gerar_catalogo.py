@@ -33,11 +33,11 @@ def gerar_jpeg(csv_path, output_jpg):
     COLS = 4
     MARGIN = 20
     PADDING = 10
-    HEADER_H = 80
+    HEADER_H = 85
     FOOTER_H = 60
     IMG_SIZE = (200, 160)
 
-    # Cores Oeste Pharma
+    # Cores
     COLOR_DARK_GREEN = (34, 112, 44)
     COLOR_LIGHT_GREEN = (228, 243, 227)
     BG_COLOR = (245, 245, 245)
@@ -47,17 +47,17 @@ def gerar_jpeg(csv_path, output_jpg):
     TEXT_WHITE = (255, 255, 255)
 
     try:
-        font_header_title = ImageFont.truetype("arialbd.ttf", 18)
-        font_header_sub = ImageFont.truetype("arial.ttf", 12)
+        font_header_title = ImageFont.truetype("arialbd.ttf", 26)
+        font_header_sub = ImageFont.truetype("arial.ttf", 13)
         font_code = ImageFont.truetype("arialbd.ttf", 11)
         font_title = ImageFont.truetype("arialbd.ttf", 12)
         font_label = ImageFont.truetype("arialbd.ttf", 10)
         font_price = ImageFont.truetype("arialbd.ttf", 18)
-        font_footer = ImageFont.truetype("arialbd.ttf", 16)
+        font_footer = ImageFont.truetype("arialbd.ttf", 17)
     except:
         font_header_title = font_header_sub = font_code = font_title = font_label = font_price = font_footer = ImageFont.load_default()
 
-    # Leitura e Metadados do CSV
+    # Leitura e Metadados
     meta = {
         'titulo': 'ENCARTE DE PRODUTOS SUJEITO A ALTERAÇÕES DE PREÇOS',
         'logo': r'f:\unico\logo\oeste.jpg',
@@ -75,7 +75,6 @@ def gerar_jpeg(csv_path, output_jpg):
         colunas = linha.split(';')
         col0 = colunas[0].lower().strip()
 
-        # Identifica a transição de Metadados para os Produtos
         if col0 in ['codigo', 'fco', 'code']:
             is_produtos = True
             continue
@@ -86,7 +85,7 @@ def gerar_jpeg(csv_path, output_jpg):
             elif col0 in ['logo_fone', 'logo_whats']: meta['logo_fone'] = colunas[1].strip()
             elif col0 in ['rodape', 'contato']: meta['rodape'] = colunas[1].strip()
             elif col0 == 'fone': meta['fone'] = colunas[1].strip()
-            elif len(colunas) >= 5: # CSV sem linha de cabeçalho 'codigo'
+            elif len(colunas) >= 5:
                 is_produtos = True
 
         if is_produtos and len(colunas) >= 5:
@@ -114,22 +113,28 @@ def gerar_jpeg(csv_path, output_jpg):
     # --- CABEÇALHO ---
     draw.rectangle([0, 0, img_w, HEADER_H], fill=COLOR_DARK_GREEN)
 
-    # Logo da Empresa
+    # Logo Empresa (Esquerda)
     path_logo = resolver_caminho_foto(meta['logo'])
     if path_logo:
         try:
             logo = Image.open(path_logo).convert('RGBA')
-            logo.thumbnail((180, 60), Image.Resampling.LANCZOS)
+            logo.thumbnail((220, 65), Image.Resampling.LANCZOS)
             canvas.paste(logo, (MARGIN, (HEADER_H - logo.height) // 2), logo)
         except:
             draw.text((MARGIN, 25), "Oeste Pharma", fill=TEXT_WHITE, font=font_header_title)
     else:
         draw.text((MARGIN, 25), "Oeste Pharma", fill=TEXT_WHITE, font=font_header_title)
 
-    # Título do Encarte
+    # Título + Subtítulo (Alinhados à Direita)
     txt_titulo = meta['titulo']
-    draw.text((img_w - 550, 22), txt_titulo, fill=TEXT_WHITE, font=font_header_title)
-    draw.text((img_w - 220, 48), "www.oestepharma.com.br", fill=TEXT_WHITE, font=font_header_sub)
+    bbox_t = font_header_title.getbbox(txt_titulo)
+    w_t = bbox_t[2] - bbox_t[0]
+    draw.text((img_w - MARGIN - w_t, 16), txt_titulo, fill=TEXT_WHITE, font=font_header_title)
+
+    txt_sub = "www.oestepharma.com.br"
+    bbox_s = font_header_sub.getbbox(txt_sub)
+    w_s = bbox_s[2] - bbox_s[0]
+    draw.text((img_w - MARGIN - w_s, 54), txt_sub, fill=TEXT_WHITE, font=font_header_sub)
 
     # --- CARDS DE PRODUTOS ---
     start_y = HEADER_H + MARGIN
@@ -178,21 +183,35 @@ def gerar_jpeg(csv_path, output_jpg):
     footer_y = img_h - FOOTER_H
     draw.rectangle([0, footer_y, img_w, img_h], fill=COLOR_DARK_GREEN)
 
-    txt_rodape = meta['rodape'] if meta['rodape'] else "Entre em contato conosco"
+    txt_rodape = meta['rodape'] if meta['rodape'] else "Entre em contato"
     txt_fone = meta['fone']
+    texto_completo = f"{txt_rodape} | Fone/Whats: {txt_fone}" if txt_fone else txt_rodape
 
-    texto_completo = f"{txt_rodape}  |  Fone/Whats: {txt_fone}" if txt_fone else txt_rodape
-    centralizar_texto(draw, texto_completo, font_footer, 0, footer_y + 18, img_w, TEXT_WHITE)
+    # Calcula largura para posicionar a frase e o ícone centralizados juntos
+    bbox_f = font_footer.getbbox(texto_completo)
+    w_texto = bbox_f[2] - bbox_f[0]
 
-    # Ícone do Whats
     path_whats = resolver_caminho_foto(meta['logo_fone'])
+    ico_w = None
     if path_whats:
         try:
             ico_w = Image.open(path_whats).convert('RGBA')
-            ico_w.thumbnail((30, 30), Image.Resampling.LANCZOS)
-            canvas.paste(ico_w, (img_w - 100, footer_y + 15), ico_w)
+            ico_w.thumbnail((26, 26), Image.Resampling.LANCZOS)
         except:
-            pass
+            ico_w = None
+
+    espaço_icone = 34 if ico_w else 0
+    largura_total_bloco = w_texto + espaço_icone
+    start_x = (img_w - largura_total_bloco) // 2
+
+    # Desenha o texto
+    draw.text((start_x, footer_y + 17), texto_completo, fill=TEXT_WHITE, font=font_footer)
+
+    # Cole o ícone logo ao lado do telefone
+    if ico_w:
+        icon_x = start_x + w_texto + 8
+        icon_y = footer_y + 17 + (bbox_f[3] - bbox_f[1] - ico_w.height) // 2
+        canvas.paste(ico_w, (icon_x, icon_y), ico_w)
 
     canvas.save(output_jpg, "JPEG", quality=92)
 
