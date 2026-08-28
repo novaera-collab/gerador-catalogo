@@ -53,7 +53,6 @@ def gerar():
                         prod[headers[idx]] = val
                 produtos.append(prod)
 
-        # 1. Pega argumento 2 | 2. Pega do CSV | 3. Fallback Downloads
         jpg_out_path = ""
         if len(sys.argv) > 2 and sys.argv[2].strip():
             jpg_out_path = sys.argv[2].strip()
@@ -67,35 +66,43 @@ def gerar():
         if out_dir and not os.path.exists(out_dir):
             os.makedirs(out_dir, exist_ok=True)
 
-        # Resolução HD Vertical para Celular (1080 x 1920)
         W, H = 1080, 1920
         img = Image.new('RGB', (W, H), color='#FFFFFF')
         draw = ImageDraw.Draw(img)
 
         try:
-            font_titulo = ImageFont.truetype("arialbd.ttf", 44)
-            font_sub = ImageFont.truetype("arial.ttf", 26)
+            font_titulo = ImageFont.truetype("arialbd.ttf", 38)
+            font_site = ImageFont.truetype("arial.ttf", 22)
+            font_sub = ImageFont.truetype("arial.ttf", 24)
             font_prod = ImageFont.truetype("arialbd.ttf", 22)
             font_preco = ImageFont.truetype("arialbd.ttf", 40)
         except:
-            font_titulo = font_sub = font_prod = font_preco = ImageFont.load_default()
+            font_titulo = font_site = font_sub = font_prod = font_preco = ImageFont.load_default()
 
-        # Header Verde
-        draw.rectangle([(0, 0), (W, 170)], fill='#22702C')
+        # CABEÇALHO VERDE
+        draw.rectangle([(0, 0), (W, 180)], fill='#22702C')
+
+        # Desenhar Logo
+        logo_path = metadados.get('logo', '')
+        if logo_path and os.path.exists(logo_path):
+            try:
+                logo_img = Image.open(logo_path).convert("RGBA")
+                logo_img.thumbnail((260, 140))
+                img.paste(logo_img, (40, 20), logo_img)
+            except:
+                pass
+
+        # Título à direita e Site abaixo
         titulo = metadados.get('titulo', 'OESTE PHARMA - ENCARTE DE OFERTAS')
-        fone = metadados.get('fone', '')
-        rodape = metadados.get('rodape', '')
+        draw.text((W - 40, 45), titulo.upper(), fill='white', font=font_titulo, anchor="ra")
+        draw.text((W - 40, 105), "www.oestepharma.com.br", fill='#E0E0E0', font=font_site, anchor="ra")
 
-        draw.text((40, 35), titulo.upper(), fill='white', font=font_titulo)
-        if fone:
-            draw.text((40, 110), f"WhatsApp: {fone}", fill='#E0E0E0', font=font_sub)
-
-        # Layout Mobile: 2 Colunas x 4 Linhas (8 Produtos Grandes)
+        # GRID DE PRODUTOS (2 colunas x 4 linhas)
         cols = 2
         margin_x = 35
-        start_y = 190
+        start_y = 200
         box_w = 485
-        box_h = 390
+        box_h = 380
         gap_x = 40
         gap_y = 20
 
@@ -122,23 +129,33 @@ def gerar():
             if l2:
                 draw.text((x + 15, y + 42), l2[:24], fill='#111111', font=font_prod)
 
-            img_p_path = p.get('imagem', p.get('foto', ''))
+            img_p_path = p.get('foto', p.get('imagem', ''))
             if img_p_path and os.path.exists(img_p_path):
                 try:
                     p_img = Image.open(img_p_path).convert("RGBA")
-                    p_img.thumbnail((240, 210))
-                    img.paste(p_img, (x + 120, y + 85), p_img)
+                    p_img.thumbnail((240, 200))
+                    img.paste(p_img, (x + 120, y + 80), p_img)
                 except:
                     pass
 
-            # Tag de Preço Verde
-            draw.rectangle([(x + 20, y + box_h - 70), (x + box_w - 20, y + box_h - 15)], fill='#25D366')
-            draw.text((x + 80, y + box_h - 62), f"R$ {preco}", fill='white', font=font_preco)
+            # Tarja de preço: Verde bem claro, letras/números em PRETO e centralizado
+            draw.rectangle([(x + 15, y + box_h - 70), (x + box_w - 15, y + box_h - 15)], fill='#E8F5E9')
+            draw.text((x + (box_w // 2), y + box_h - 60), f"R$ {preco}", fill='#000000', font=font_preco, anchor="mm")
 
-        # Rodapé Verde
-        draw.rectangle([(0, H - 90), (W, H)], fill='#22702C')
-        if rodape:
-            draw.text((40, H - 60), rodape.upper(), fill='white', font=font_sub)
+        # RODAPÉ VERDE
+        draw.rectangle([(0, H - 110), (W, H)], fill='#22702C')
+        
+        # Validade no meio do rodapé
+        validade = metadados.get('validade', '')
+        if validade:
+            draw.text((W // 2, H - 75), validade.upper(), fill='white', font=font_sub, anchor="mm")
+
+        # Contato e fone
+        rodape_txt = metadados.get('rodape', '')
+        fone_txt = metadados.get('fone', '')
+        info_contato = f"Contato: {rodape_txt}  -  {fone_txt}".strip(" -")
+        if info_contato:
+            draw.text((W // 2, H - 35), info_contato, fill='#E0E0E0', font=font_site, anchor="mm")
 
         img.save(jpg_out_path, "JPEG", quality=95)
 
