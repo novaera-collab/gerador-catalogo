@@ -23,15 +23,15 @@ jobs:
 
     - name: Gerar Executavel do Gerador
       run: |
-        pyinstaller --noconfirm --onedir --windowed --name GERAR_CATALOGO gerar_catalogo.py
+        pyinstaller --noconfirm --onefile --windowed --name GERAR_CATALOGO gerar_catalogo.py
 
     - name: Gerar Executavel do Visualizador
       run: |
-        pyinstaller --noconfirm --onedir --windowed --name VISUALIZAR_CATALOGO visualizar_catalogo.py
+        pyinstaller --noconfirm --onefile --windowed --name VISUALIZAR_CATALOGO visualizar_catalogo.py
 
     - name: Criar Zip dos Executaveis
       run: |
-        powershell Compress-Archive -Path dist/GERAR_CATALOGO/GERAR_CATALOGO.exe, dist/VISUALIZAR_CATALOGO/VISUALIZAR_CATALOGO.exe -DestinationPath Executaveis.zip
+        powershell Compress-Archive -Path dist/GERAR_CATALOGO.exe, dist/VISUALIZAR_CATALOGO.exe -DestinationPath Executaveis.zip
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v3
