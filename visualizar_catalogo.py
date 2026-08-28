@@ -41,7 +41,6 @@ class AppVisualizador:
         self.csv_path = csv_path
         self.meta = ler_metadados_csv(csv_path)
         
-        # Pega o JPG indicado no CSV ou fallback para Downloads do usuario
         self.jpg_path = self.meta.get('saida_jpg', '')
         if not self.jpg_path and len(sys.argv) > 2:
             self.jpg_path = sys.argv[2]
@@ -54,6 +53,11 @@ class AppVisualizador:
         self.root.title("Visualizador de Encarte - Oeste Pharma")
         self.root.geometry("1000x750")
         self.root.configure(bg="#f0f0f0")
+        
+        # Garante foco na janela do visualizador sem prender o ERP
+        self.root.lift()
+        self.root.attributes('-topmost', True)
+        self.root.after_idle(self.root.attributes, '-topmost', False)
 
         # --- PAINEL SUPERIOR ---
         frame_topo = tk.Frame(self.root, bg="#22702C")
