@@ -4,7 +4,7 @@ import csv
 import webbrowser
 import urllib.parse
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import messagebox
 from PIL import Image, ImageTk
 
 def ler_metadados_csv(csv_path):
@@ -30,11 +30,9 @@ def ler_metadados_csv(csv_path):
     return meta
 
 def limpar_numero_whatsapp(fone_raw):
-    # Remove caracteres nao numericos
     apenas_numeros = "".join(c for c in fone_raw if c.isdigit())
     if not apenas_numeros:
         return ""
-    # Se nao tiver codigo do pais, adiciona 55 (Brasil)
     if len(apenas_numeros) in [10, 11]:
         return "55" + apenas_numeros
     return apenas_numeros
@@ -52,12 +50,12 @@ class AppVisualizador:
         self.root.geometry("1000x750")
         self.root.configure(bg="#f0f0f0")
 
-        # --- PAINEL SUPERIOR (AÇOES) ---
-        frame_topo = tk.Frame(self.root, bg="#22702C", padding=10)
-        frame_topo.pack(fill="x", side="top")
+        # --- PAINEL SUPERIOR ---
+        frame_topo = tk.Frame(self.root, bg="#22702C")
+        frame_topo.pack(fill="x", side="top", ipady=10)
 
         lbl_titulo = tk.Label(frame_topo, text="Encarte Gerado com Sucesso!", font=("Arial", 14, "bold"), fg="white", bg="#22702C")
-        lbl_titulo.pack(side="left", padx=10)
+        lbl_titulo.pack(side="left", padx=15)
 
         # Botao WhatsApp
         btn_whats = tk.Button(
@@ -70,7 +68,7 @@ class AppVisualizador:
             cursor="hand2",
             command=self.abrir_whatsapp
         )
-        btn_whats.pack(side="right", padx=10)
+        btn_whats.pack(side="right", padx=15)
 
         # Botao Abrir Pasta
         btn_pasta = tk.Button(
@@ -84,7 +82,7 @@ class AppVisualizador:
         )
         btn_pasta.pack(side="right", padx=5)
 
-        # --- PAINEL CENTRAL (IMAGEM) ---
+        # --- PAINEL CENTRAL ---
         self.canvas = tk.Canvas(self.root, bg="#333333")
         self.canvas.pack(fill="both", expand=True)
 
@@ -96,7 +94,6 @@ class AppVisualizador:
     def carregar_imagem(self):
         self.pil_img = Image.open(self.jpg_path)
         
-        # Redimensiona mantendo proporcao para caber na tela
         img_w, img_h = self.pil_img.size
         max_w, max_h = 960, 640
         ratio = min(max_w/img_w, max_h/img_h)
