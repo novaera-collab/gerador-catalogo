@@ -19,7 +19,7 @@ def ler_metadados_csv(csv_path):
 
     for linha in linhas:
         colunas = linha.split(';')
-        col0 = colunas[0].lower().strip()
+        col0 = colunas[0].lower().strip().replace(':', '')
         if col0 in ['codigo', 'fco', 'code']:
             break
         if len(colunas) > 1:
@@ -59,17 +59,6 @@ class AppVisualizador:
         self.root.lift()
         self.root.attributes('-topmost', True)
         self.root.after_idle(self.root.attributes, '-topmost', False)
-
-        # MENSAGEM POP-UP MOSTRANDO DIRETÓRIO E ARQUIVO
-        diretorio, nome_arquivo = os.path.split(os.path.abspath(self.jpg_path))
-        existe = "ENCONTRADO" if os.path.exists(self.jpg_path) else "NÃO ENCONTRADO"
-        
-        messagebox.showinfo(
-            "Abrindo Arquivo",
-            f"Diretório:\n{diretorio}\n\n"
-            f"Arquivo:\n{nome_arquivo}\n\n"
-            f"Status do Arquivo: {existe}"
-        )
 
         # PAINEL SUPERIOR
         frame_topo = tk.Frame(self.root, bg="#22702C")
