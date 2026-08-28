@@ -3,10 +3,30 @@ import csv
 import os
 from PIL import Image, ImageDraw, ImageFont
 
+def resolver_caminho_foto(foto_raw):
+    """Trata o caminho da foto na rede mesmo se faltar extensão"""
+    foto_path = foto_raw.strip()
+    if not foto_path:
+        return None
+    
+    # Se o arquivo existe como informado
+    if os.path.exists(foto_path):
+        return foto_path
+
+    # Tenta extensões comuns se o caminho veio sem extensão
+    extensoes = ['.jpg', '.JPG', '.jpeg', '.JPEG', '.png', '.PNG']
+    for ext in extensoes:
+        caminho_teste = foto_path + ext
+        if os.path.exists(caminho_teste):
+            return caminho_teste
+
+    return None
+
 def gerar_jpeg(csv_path, output_jpg):
     if not os.path.exists(csv_path):
         return
 
+    # Configurações do Grid de Layout
     CARD_W, CARD_H = 300, 320
     COLS = 4
     MARGIN = 20
@@ -28,10 +48,25 @@ def gerar_jpeg(csv_path, output_jpg):
         font_title = font_code = font_price = ImageFont.load_default()
 
     produtos = []
+    
+    # Leitura tolerante do CSV (com ou sem cabeçalho)
     with open(csv_path, mode='r', encoding='latin-1') as f:
-        reader = csv.DictReader(f, delimiter=';')
-        for row in reader:
-            produtos.append(row)
+        linhas = [line.strip() for line in f if line.strip()]
+        
+    for linha in linhas:
+        colunas = linha.split(';')
+        if len(colunas) >= 5:
+            # Ignora linha se for o cabeçalho
+            if colunas[0].lower() in ['codigo', 'fco', 'code']:
+                continue
+            
+            produtos.append({
+                'codigo': colunas[0].strip(),
+                'descricao': colunas[1].strip(),
+                'marca': colunas[2].strip(),
+                'preco': colunas[3].strip(),
+                'foto': colunas[4].strip()
+            })
 
     if not produtos:
         return
@@ -54,10 +89,10 @@ def gerar_jpeg(csv_path, output_jpg):
 
         draw.rectangle([x, y, x + CARD_W, y + CARD_H], fill=CARD_BG, outline=CARD_BORDER, width=2)
 
-        foto_path = prod.get('foto', '').strip()
+        foto_path = resolver_caminho_foto(prod.get('foto', ''))
         img_obj = None
 
-        if foto_path and os.path.exists(foto_path):
+        if foto_path:
             try:
                 img_obj = Image.open(foto_path).convert('RGB')
             except:
