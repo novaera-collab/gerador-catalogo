@@ -127,7 +127,7 @@ class PesquisaProdutoModal(ctk.CTkToplevel):
         frame_busca.pack(fill="x", padx=15, pady=10)
 
         ctk.CTkLabel(frame_busca, text="Buscar Por:").pack(side="left", padx=5)
-        self.txt_busca = ctk.CTkEntry(frame_busca, width=320, placeholder_text="Digite o Código, Nome ou Descrição...")
+        self.txt_busca = ctk.CTkEntry(frame_busca, width=320, placeholder_text="Digite o Código, Descrição ou Complemento...")
         self.txt_busca.pack(side="left", padx=5)
         self.txt_busca.bind("<Return>", lambda e: self.pesquisar())
 
@@ -149,11 +149,16 @@ class PesquisaProdutoModal(ctk.CTkToplevel):
             conn = get_connection()
             cur = conn.cursor()
 
-            # Concatenação: fco || fde || fdescricao
+            # Concatenação fco + fdescricao + fcomplemen | Regra CASE WHEN para o nome
             query = """
-                SELECT fco, fde, fdescricao 
+                SELECT 
+                    fco, 
+                    CASE 
+                        WHEN COALESCE(fcomplemen, '') <> '' THEN fcomplemen 
+                        ELSE fdescricao 
+                    END AS nome_exibicao
                 FROM esprod 
-                WHERE COALESCE(CAST(fco AS TEXT), '') || ' ' || COALESCE(fde, '') || ' ' || COALESCE(fdescricao, '') ILIKE %s
+                WHERE COALESCE(CAST(fco AS TEXT), '') || ' ' || COALESCE(fdescricao, '') || ' ' || COALESCE(fcomplemen, '') ILIKE %s
                 LIMIT 50
             """
             like_term = f"%{termo}%"
@@ -167,7 +172,7 @@ class PesquisaProdutoModal(ctk.CTkToplevel):
 
             for prod in produtos:
                 cod_str = str(prod['fco']).zfill(5)
-                nome_prod = prod['fde'] or prod['fdescricao'] or ''
+                nome_prod = prod['nome_exibicao'] or ''
 
                 row = ctk.CTkFrame(self.frame_resultados)
                 row.pack(fill="x", pady=2, padx=2)
@@ -303,7 +308,6 @@ class FormEncarteWindow(ctk.CTkToplevel):
 
         cod_formatted = self.formatar_codigo_5_digitos(cod_raw)
 
-        # Trata preço opcional: se em branco, fica 0.00
         if not preco_raw:
             preco_val = 0.0
         else:
