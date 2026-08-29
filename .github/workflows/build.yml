@@ -19,7 +19,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install customtkinter psycopg2-binary pillow pywin32 pyinstaller tkcalendar
+        pip install customtkinter psycopg2-binary pillow pywin32 pyinstaller tkcalendar babel
 
     - name: Build GERAR_CATALOGO
       run: |
@@ -31,7 +31,7 @@ jobs:
 
     - name: Build APP_GESTAO_ENCARTE
       run: |
-        pyinstaller --noconsole --onefile --collect-all customtkinter --collect-all tkcalendar --name APP_GESTAO_ENCARTE app_gestao_encarte.py
+        pyinstaller --onefile --collect-all customtkinter --collect-all tkcalendar --collect-all babel --name APP_GESTAO_ENCARTE app_gestao_encarte.py
 
     - name: Upload Executables
       uses: actions/upload-artifact@v4
