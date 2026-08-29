@@ -2,7 +2,7 @@ import sys
 import os
 import json
 import traceback
-from datetime import datetime
+from datetime import datetime, date
 from tkinter import messagebox, Toplevel
 
 # 1. CAPTURA DE ERRO FATAL NA INICIALIZAÇÃO
@@ -151,7 +151,7 @@ class PesquisaProdutoModal(ctk.CTkToplevel):
 
             query = """
                 SELECT fco, fde, fdescricao 
-                FROM public.esprod 
+                FROM esprod 
                 WHERE CAST(fco AS TEXT) ILIKE %s 
                    OR fde ILIKE %s 
                    OR fdescricao ILIKE %s
@@ -336,7 +336,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
         self.atualizar_grid()
 
     def converter_data_para_br(self, data_obj):
-        if isinstance(data_obj, (datetime, datetime.date)):
+        if hasattr(data_obj, 'strftime'):
             return data_obj.strftime('%d/%m/%Y')
         return str(data_obj)
 
@@ -351,7 +351,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
         try:
             conn = get_connection()
             cur = conn.cursor()
-            cur.execute("SELECT * FROM public.encarte WHERE id = %s", (self.encarte_id,))
+            cur.execute("SELECT * FROM encarte WHERE id = %s", (self.encarte_id,))
             enc = cur.fetchone()
 
             if enc:
@@ -359,7 +359,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
                 self.txt_dt_ini.insert(0, self.converter_data_para_br(enc['data_inicio']))
                 self.txt_dt_fim.insert(0, self.converter_data_para_br(enc['data_fim']))
 
-                cur.execute("SELECT codigo_prod, preco_oferta FROM public.encarte_item WHERE encarte_id = %s ORDER BY ordem, id", (self.encarte_id,))
+                cur.execute("SELECT codigo_prod, preco_oferta FROM encarte_item WHERE encarte_id = %s ORDER BY ordem, id", (self.encarte_id,))
                 itens_bd = cur.fetchall()
                 self.itens = [{'codigo_prod': self.formatar_codigo_5_digitos(str(i['codigo_prod'])), 'preco_oferta': float(i['preco_oferta'])} for i in itens_bd]
                 self.atualizar_grid()
@@ -390,23 +390,23 @@ class FormEncarteWindow(ctk.CTkToplevel):
 
             if self.encarte_id:
                 cur.execute("""
-                    UPDATE public.encarte 
+                    UPDATE encarte 
                     SET titulo=%s, data_inicio=%s, data_fim=%s 
                     WHERE id=%s
                 """, (titulo, dt_ini_iso, dt_fim_iso, self.encarte_id))
                 
-                cur.execute("DELETE FROM public.encarte_item WHERE encarte_id=%s", (self.encarte_id,))
+                cur.execute("DELETE FROM encarte_item WHERE encarte_id=%s", (self.encarte_id,))
                 enc_id = self.encarte_id
             else:
                 cur.execute("""
-                    INSERT INTO public.encarte (titulo, data_inicio, data_fim) 
+                    INSERT INTO encarte (titulo, data_inicio, data_fim) 
                     VALUES (%s, %s, %s) RETURNING id
                 """, (titulo, dt_ini_iso, dt_fim_iso))
                 enc_id = cur.fetchone()['id']
 
             for idx, item in enumerate(self.itens):
                 cur.execute("""
-                    INSERT INTO public.encarte_item (encarte_id, codigo_prod, preco_oferta, ordem) 
+                    INSERT INTO encarte_item (encarte_id, codigo_prod, preco_oferta, ordem) 
                     VALUES (%s, %s, %s, %s)
                 """, (enc_id, item['codigo_prod'], item['preco_oferta'], idx))
 
@@ -422,7 +422,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
             messagebox.showerror("Erro ao Salvar", str(e))
 
 # ==============================================================================
-# TELA PRINCIPAL DO APLICATIVO (LISTAGEM DE ENCARTES + BOTÃO PARÂMETROS)
+# TELA PRINCIPAL DO APLICATIVO
 # ==============================================================================
 class AppPrincipal(ctk.CTk):
     def __init__(self):
@@ -458,7 +458,7 @@ class AppPrincipal(ctk.CTk):
         try:
             conn = get_connection()
             cur = conn.cursor()
-            cur.execute("SELECT id, titulo, data_inicio, data_fim FROM public.encarte ORDER BY id DESC")
+            cur.execute("SELECT id, titulo, data_inicio, data_fim FROM encarte ORDER BY id DESC")
             encartes = cur.fetchall()
             conn.close()
 
@@ -470,8 +470,8 @@ class AppPrincipal(ctk.CTk):
                 row = ctk.CTkFrame(self.frame_lista)
                 row.pack(fill="x", pady=4, padx=5)
 
-                dt_ini = enc['data_inicio'].strftime('%d/%m/%Y') if isinstance(enc['data_inicio'], (datetime, datetime.date)) else str(enc['data_inicio'])
-                dt_fim = enc['data_fim'].strftime('%d/%m/%Y') if isinstance(enc['data_fim'], (datetime, datetime.date)) else str(enc['data_fim'])
+                dt_ini = enc['data_inicio'].strftime('%d/%m/%Y') if hasattr(enc['data_inicio'], 'strftime') else str(enc['data_inicio'])
+                dt_fim = enc['data_fim'].strftime('%d/%m/%Y') if hasattr(enc['data_fim'], 'strftime') else str(enc['data_fim'])
 
                 lbl_info = f"#{enc['id']} - {enc['titulo']} ({dt_ini} a {dt_fim})"
                 ctk.CTkLabel(row, text=lbl_info, anchor="w", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=10, fill="x", expand=True)
