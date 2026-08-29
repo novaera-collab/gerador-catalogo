@@ -1,10 +1,47 @@
 import sys
 import os
+import io
 import webbrowser
 import urllib.parse
 import tkinter as tk
 from tkinter import messagebox
 from PIL import Image, ImageTk
+
+# Biblioteca do Windows para manipular area de transferencia
+try:
+    import win32clipboard
+    WIN32_DISPONIVEL = True
+except ImportError:
+    WIN32_DISPONIVEL = False
+
+def copiar_imagem_para_clipboard(caminho_img):
+    """Copia o arquivo JPG diretamente para a memoria do Windows (CTRL+V)"""
+    if not os.path.exists(caminho_img):
+        return False
+
+    if WIN32_DISPONIVEL:
+        try:
+            image = Image.open(caminho_img)
+            output = io.BytesIO()
+            image.convert("RGB").save(output, "BMP")
+            data = output.getvalue()[14:]
+            output.close()
+
+            win32clipboard.OpenClipboard()
+            win32clipboard.EmptyClipboard()
+            win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data)
+            win32clipboard.CloseClipboard()
+            return True
+        except Exception as e:
+            return False
+    else:
+        # Fallback usando PowerShell se pywin32 nao estiver instalado
+        try:
+            cmd = f'powershell -command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Clipboard]::SetImage([System.Drawing.Image]::FromFile(\'{caminho_img}\'))"'
+            os.system(cmd)
+            return True
+        except:
+            return False
 
 def ler_metadados_csv(csv_path):
     meta = {'fone': '', 'rodape': '', 'titulo': '', 'saida_jpg': '', 'validade': '', 'logo': ''}
@@ -18,6 +55,11 @@ def ler_metadados_csv(csv_path):
         return meta
 
     for linha in linhas:
+        if linha.lower().startswith('validade:'):
+            partes_v = linha.split(':', 1)
+            meta['validade'] = partes_v[1].strip()
+            continue
+
         colunas = linha.split(';')
         col0 = colunas[0].lower().strip().replace(':', '')
         if col0 in ['codigo', 'fco', 'code']:
@@ -69,7 +111,7 @@ class AppVisualizador:
 
         btn_whats = tk.Button(
             frame_topo, 
-            text="📱 Abrir WhatsApp", 
+            text="📱 Copiar Imagem e Abrir WhatsApp", 
             font=("Arial", 11, "bold"), 
             bg="#25D366", 
             fg="white", 
@@ -113,14 +155,25 @@ class AppVisualizador:
         self.canvas.create_image(500, 330, image=self.tk_img, anchor="center")
 
     def abrir_whatsapp(self):
-        if not self.num_whats:
-            messagebox.showwarning("WhatsApp", "Nenhum número de telefone válido encontrado!")
-            return
+        # 1. Copia a imagem para o clipboard do Windows (CTRL+V)
+        copiou = copiar_imagem_para_clipboard(self.jpg_path)
 
-        mensagem = f"Olá! Segue nosso {self.meta.get('titulo', 'Encarte de Ofertas')}."
-        msg_encoded = urllib.parse.quote(mensagem)
-        url = f"https://api.whatsapp.com/send?phone={self.num_whats}&text={msg_encoded}"
-        webbrowser.open(url)
+        if copiou:
+            messagebox.showinfo(
+                "Imagem Copiada!", 
+                "A imagem do encarte foi COPIADA para a memória!\n\n"
+                "Ao abrir o WhatsApp, basta pressionar CTRL + V na conversa para colar a imagem!"
+            )
+
+        # 2. Abre a conversa no WhatsApp
+        if self.num_whats:
+            mensagem = f"Olá! Segue nosso {self.meta.get('titulo', 'Encarte de Ofertas')}."
+            msg_encoded = urllib.parse.quote(mensagem)
+            url = f"https://api.whatsapp.com/send?phone={self.num_whats}&text={msg_encoded}"
+            webbrowser.open(url)
+        else:
+            # Caso não tenha telefone no CSV, abre o WhatsApp Web geral
+            webbrowser.open("https://web.whatsapp.com")
 
     def abrir_pasta(self):
         if os.path.exists(self.jpg_path):
