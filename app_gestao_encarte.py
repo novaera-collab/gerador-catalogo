@@ -1,40 +1,114 @@
 import sys
 import os
+import json
 import traceback
 from datetime import datetime
 from tkinter import messagebox, Toplevel
-import psycopg2
-from psycopg2.extras import RealDictCursor
-import customtkinter as ctk
-from tkcalendar import DateEntry
-# ==============================================================================
-# CONEXÃO COM O BANCO DE DADOS POSTGRESQL (COLE AQUI!)
-# ==============================================================================
-def get_connection():
-    return psycopg2.connect(
-        host="seu_host_aqui",       # Substitua com os dados reais do seu banco
-        database="seu_banco_aqui",
-        user="seu_usuario_aqui",
-        password="sua_senha_aqui",
-        port="5432",
-        cursor_factory=RealDictCursor
-    )
 
-from datetime import datetime
-from tkinter import messagebox, Toplevel
-
-# 1. CAPTURA DE ERRO FATAL (Deve ficar antes de criar as janelas do Tkinter)
+# 1. CAPTURA DE ERRO FATAL NA INICIALIZAÇÃO
 def mostrar_erro_fatal(exc_type, exc_value, exc_traceback):
     erro_msg = "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
     messagebox.showerror("Erro Fatal na Inicialização", f"Ocorreu um erro ao abrir o app:\n\n{erro_msg}")
 
 sys.excepthook = mostrar_erro_fatal
 
-# 2. DEMAIS IMPORTAÇÕES
+# 2. IMPORTAÇÕES PRINCIPAIS
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import customtkinter as ctk
 from tkcalendar import DateEntry
+
+CONFIG_FILE = "config_banco.json"
+
+def carregar_config():
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {
+        "host": "localhost",
+        "database": "seu_banco",
+        "user": "postgres",
+        "password": "sua_senha",
+        "port": "5432"
+    }
+
+def salvar_config(cfg):
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(cfg, f, indent=4)
+
+# ==============================================================================
+# CONEXÃO COM O BANCO DE DADOS POSTGRESQL
+# ==============================================================================
+def get_connection():
+    cfg = carregar_config()
+    return psycopg2.connect(
+        host=cfg.get("host", "localhost"),
+        database=cfg.get("database", "seu_banco"),
+        user=cfg.get("user", "postgres"),
+        password=cfg.get("password", ""),
+        port=cfg.get("port", "5432"),
+        cursor_factory=RealDictCursor
+    )
+
+# ==============================================================================
+# JANELA DE PARÂMETROS DA CONEXÃO
+# ==============================================================================
+class ParametrosWindow(ctk.CTkToplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("⚙️ Parâmetros de Conexão")
+        self.geometry("400x380")
+        self.grab_set()
+
+        cfg = carregar_config()
+
+        ctk.CTkLabel(self, text="Configuração do Banco PostgreSQL", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=10)
+
+        frame = ctk.CTkFrame(self)
+        frame.pack(fill="both", expand=True, padx=20, pady=10)
+
+        ctk.CTkLabel(frame, text="Host / IP:").grid(row=0, column=0, padx=10, pady=5, sticky="w")
+        self.txt_host = ctk.CTkEntry(frame, width=200)
+        self.txt_host.insert(0, cfg.get("host", ""))
+        self.txt_host.grid(row=0, column=1, padx=10, pady=5)
+
+        ctk.CTkLabel(frame, text="Banco de Dados:").grid(row=1, column=0, padx=10, pady=5, sticky="w")
+        self.txt_db = ctk.CTkEntry(frame, width=200)
+        self.txt_db.insert(0, cfg.get("database", ""))
+        self.txt_db.grid(row=1, column=1, padx=10, pady=5)
+
+        ctk.CTkLabel(frame, text="Usuário:").grid(row=2, column=0, padx=10, pady=5, sticky="w")
+        self.txt_user = ctk.CTkEntry(frame, width=200)
+        self.txt_user.insert(0, cfg.get("user", ""))
+        self.txt_user.grid(row=2, column=1, padx=10, pady=5)
+
+        ctk.CTkLabel(frame, text="Senha:").grid(row=3, column=0, padx=10, pady=5, sticky="w")
+        self.txt_pass = ctk.CTkEntry(frame, width=200, show="*")
+        self.txt_pass.insert(0, cfg.get("password", ""))
+        self.txt_pass.grid(row=3, column=1, padx=10, pady=5)
+
+        ctk.CTkLabel(frame, text="Porta:").grid(row=4, column=0, padx=10, pady=5, sticky="w")
+        self.txt_port = ctk.CTkEntry(frame, width=200)
+        self.txt_port.insert(0, cfg.get("port", "5432"))
+        self.txt_port.grid(row=4, column=1, padx=10, pady=5)
+
+        btn_salvar = ctk.CTkButton(self, text="💾 Salvar Parâmetros", fg_color="#1B5E20", command=self.salvar)
+        btn_salvar.pack(pady=15)
+
+    def salvar(self):
+        cfg = {
+            "host": self.txt_host.get().strip(),
+            "database": self.txt_db.get().strip(),
+            "user": self.txt_user.get().strip(),
+            "password": self.txt_pass.get().strip(),
+            "port": self.txt_port.get().strip()
+        }
+        salvar_config(cfg)
+        messagebox.showinfo("Sucesso", "Parâmetros salvos com sucesso!")
+        self.destroy()
 
 # ==============================================================================
 # JANELA MODAL DE PESQUISA DE PRODUTO (LUPA EM ESPROD)
@@ -49,7 +123,6 @@ class PesquisaProdutoModal(ctk.CTkToplevel):
         self.geometry("700x480")
         self.grab_set()
 
-        # Barra de Pesquisa
         frame_busca = ctk.CTkFrame(self)
         frame_busca.pack(fill="x", padx=15, pady=10)
 
@@ -61,7 +134,6 @@ class PesquisaProdutoModal(ctk.CTkToplevel):
         btn_buscar = ctk.CTkButton(frame_busca, text="Pesquisar", width=100, command=self.pesquisar)
         btn_buscar.pack(side="left", padx=5)
 
-        # Grade/Lista de Resultados
         self.frame_resultados = ctk.CTkScrollableFrame(self)
         self.frame_resultados.pack(fill="both", expand=True, padx=15, pady=5)
 
@@ -187,7 +259,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
         btn_cancelar.pack(side="right", padx=5)
 
     def formatar_codigo_5_digitos(self, valor):
-        valor_limpo = valor.strip()
+        valor_limpo = str(valor).strip()
         if valor_limpo.isdigit():
             return valor_limpo.zfill(5)
         return valor_limpo
@@ -348,23 +420,79 @@ class FormEncarteWindow(ctk.CTkToplevel):
 
         except Exception as e:
             messagebox.showerror("Erro ao Salvar", str(e))
+
 # ==============================================================================
-# EXECUÇÃO PRINCIPAL DO APLICATIVO
+# TELA PRINCIPAL DO APLICATIVO (LISTAGEM DE ENCARTES + BOTÃO PARÂMETROS)
+# ==============================================================================
+class AppPrincipal(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        self.title("Gestão de Encartes")
+        self.geometry("700x480")
+
+        # Cabeçalho
+        frame_topo = ctk.CTkFrame(self)
+        frame_topo.pack(fill="x", padx=15, pady=10)
+
+        ctk.CTkLabel(frame_topo, text="Encartes Cadastrados", font=ctk.CTkFont(size=16, weight="bold")).pack(side="left", padx=10)
+        
+        btn_params = ctk.CTkButton(frame_topo, text="⚙️ Parâmetros", fg_color="#455A64", width=110, command=self.abrir_parametros)
+        btn_params.pack(side="right", padx=5, pady=5)
+
+        btn_novo = ctk.CTkButton(frame_topo, text="➕ Novo Encarte", fg_color="#2E7D32", width=120, command=self.novo_encarte)
+        btn_novo.pack(side="right", padx=5, pady=5)
+
+        # Lista de Encartes
+        self.frame_lista = ctk.CTkScrollableFrame(self)
+        self.frame_lista.pack(fill="both", expand=True, padx=15, pady=5)
+
+        self.carregar_encartes()
+
+    def abrir_parametros(self):
+        ParametrosWindow(self)
+
+    def carregar_encartes(self):
+        for w in self.frame_lista.winfo_children():
+            w.destroy()
+
+        try:
+            conn = get_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT id, titulo, data_inicio, data_fim FROM public.encarte ORDER BY id DESC")
+            encartes = cur.fetchall()
+            conn.close()
+
+            if not encartes:
+                ctk.CTkLabel(self.frame_lista, text="Nenhum encarte cadastrado.", text_color="gray").pack(pady=20)
+                return
+
+            for enc in encartes:
+                row = ctk.CTkFrame(self.frame_lista)
+                row.pack(fill="x", pady=4, padx=5)
+
+                dt_ini = enc['data_inicio'].strftime('%d/%m/%Y') if isinstance(enc['data_inicio'], (datetime, datetime.date)) else str(enc['data_inicio'])
+                dt_fim = enc['data_fim'].strftime('%d/%m/%Y') if isinstance(enc['data_fim'], (datetime, datetime.date)) else str(enc['data_fim'])
+
+                lbl_info = f"#{enc['id']} - {enc['titulo']} ({dt_ini} a {dt_fim})"
+                ctk.CTkLabel(row, text=lbl_info, anchor="w", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=10, fill="x", expand=True)
+
+                btn_editar = ctk.CTkButton(row, text="✏️ Editar", width=70, command=lambda e_id=enc['id']: self.editar_encarte(e_id))
+                btn_editar.pack(side="right", padx=5, pady=5)
+
+        except Exception as e:
+            ctk.CTkLabel(self.frame_lista, text=f"Erro ao consultar o banco de dados:\n{e}", text_color="#EF5350").pack(pady=20)
+
+    def novo_encarte(self):
+        FormEncarteWindow(self, callback_refresh=self.carregar_encartes)
+
+    def editar_encarte(self, encarte_id):
+        FormEncarteWindow(self, encarte_id=encarte_id, callback_refresh=self.carregar_encartes)
+
+# ==============================================================================
+# INICIALIZAÇÃO DA APLICAÇÃO
 # ==============================================================================
 if __name__ == "__main__":
     ctk.set_appearance_mode("Dark")
     ctk.set_default_color_theme("blue")
-
-    root = ctk.CTk()
-    root.title("Gestão de Encartes")
-    root.geometry("400x200")
-
-    # Botão principal para abrir a janela de encartes
-    btn_abrir = ctk.CTkButton(
-        root, 
-        text="➕ Gerenciar Encartes", 
-        command=lambda: FormEncarteWindow(root)
-    )
-    btn_abrir.pack(expand=True)
-
-    root.mainloop()    
+    app = AppPrincipal()
+    app.mainloop()
