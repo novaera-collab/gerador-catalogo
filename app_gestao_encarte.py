@@ -1,9 +1,20 @@
+import sys
 import os
+import traceback
 from datetime import datetime
+from tkinter import messagebox, Toplevel
+
+# 1. CAPTURA DE ERRO FATAL (Deve ficar antes de criar as janelas do Tkinter)
+def mostrar_erro_fatal(exc_type, exc_value, exc_traceback):
+    erro_msg = "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+    messagebox.showerror("Erro Fatal na Inicialização", f"Ocorreu um erro ao abrir o app:\n\n{erro_msg}")
+
+sys.excepthook = mostrar_erro_fatal
+
+# 2. DEMAIS IMPORTAÇÕES
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import customtkinter as ctk
-from tkinter import messagebox, Toplevel
 from tkcalendar import DateEntry
 
 # ==============================================================================
@@ -47,7 +58,6 @@ class PesquisaProdutoModal(ctk.CTkToplevel):
             conn = get_connection()
             cur = conn.cursor()
 
-            # Busca no esprod por fco (código), fde (nome) ou fdescricao (descrição)
             query = """
                 SELECT fco, fde, fdescricao 
                 FROM public.esprod 
@@ -86,7 +96,7 @@ class PesquisaProdutoModal(ctk.CTkToplevel):
         self.destroy()
 
 # ==============================================================================
-# FORMULÁRIO DE CADASTRO / ALTERAÇÃO DE ENCARTE (ATUALIZADO)
+# FORMULÁRIO DE CADASTRO / ALTERAÇÃO DE ENCARTE
 # ==============================================================================
 class FormEncarteWindow(ctk.CTkToplevel):
     def __init__(self, parent, encarte_id=None, callback_refresh=None):
@@ -104,33 +114,28 @@ class FormEncarteWindow(ctk.CTkToplevel):
             self.carregar_dados()
 
     def criar_widgets(self):
-        # Cabeçalho
         lbl_titulo = ctk.CTkLabel(self, text="Manutenção do Encarte", font=ctk.CTkFont(size=20, weight="bold"))
         lbl_titulo.pack(pady=10, padx=20, anchor="w")
 
         frame_head = ctk.CTkFrame(self)
         frame_head.pack(fill="x", padx=20, pady=5)
 
-        # Título
         ctk.CTkLabel(frame_head, text="Título:").grid(row=0, column=0, padx=10, pady=8, sticky="w")
         self.txt_titulo = ctk.CTkEntry(frame_head, width=380, placeholder_text="Ex: ENCARTE FARMAX")
         self.txt_titulo.grid(row=0, column=1, columnspan=3, padx=10, pady=8, sticky="w")
 
-        # Data Início (com máscara DD/MM/AAAA e botão Calendário)
         ctk.CTkLabel(frame_head, text="Data Início:").grid(row=1, column=0, padx=10, pady=8, sticky="w")
         self.txt_dt_ini = ctk.CTkEntry(frame_head, width=120, placeholder_text="29/08/2026")
         self.txt_dt_ini.grid(row=1, column=1, padx=(10, 2), pady=8, sticky="w")
         btn_cal_ini = ctk.CTkButton(frame_head, text="📅", width=35, command=lambda: self.abrir_calendario(self.txt_dt_ini))
         btn_cal_ini.grid(row=1, column=1, padx=(135, 0), pady=8, sticky="w")
 
-        # Data Fim (com máscara DD/MM/AAAA e botão Calendário)
         ctk.CTkLabel(frame_head, text="Data Fim:").grid(row=1, column=2, padx=10, pady=8, sticky="w")
         self.txt_dt_fim = ctk.CTkEntry(frame_head, width=120, placeholder_text="05/09/2026")
         self.txt_dt_fim.grid(row=1, column=3, padx=(10, 2), pady=8, sticky="w")
         btn_cal_fim = ctk.CTkButton(frame_head, text="📅", width=35, command=lambda: self.abrir_calendario(self.txt_dt_fim))
         btn_cal_fim.grid(row=1, column=3, padx=(135, 0), pady=8, sticky="w")
 
-        # Grade do Produto (com Lupa 🔍 e Auto-Formatação de 5 dígitos)
         frame_prod = ctk.CTkFrame(self)
         frame_prod.pack(fill="x", padx=20, pady=10)
 
@@ -138,7 +143,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
         
         self.txt_p_cod = ctk.CTkEntry(frame_prod, width=90, placeholder_text="00001")
         self.txt_p_cod.grid(row=0, column=1, padx=(5, 2), pady=5)
-        self.txt_p_cod.bind("<FocusOut>", self.formatar_codigo_evento)  # Formata 5 dígitos ao sair do campo
+        self.txt_p_cod.bind("<FocusOut>", self.formatar_codigo_evento)
 
         btn_lupa = ctk.CTkButton(frame_prod, text="🔍", width=35, fg_color="#1976D2", command=self.abrir_lupa)
         btn_lupa.grid(row=0, column=2, padx=(0, 10), pady=5)
@@ -150,11 +155,9 @@ class FormEncarteWindow(ctk.CTkToplevel):
         btn_add = ctk.CTkButton(frame_prod, text="+ Adicionar", width=100, fg_color="#2E7D32", command=self.adicionar_item)
         btn_add.grid(row=0, column=5, padx=15, pady=5)
 
-        # Grade de Itens
         self.frame_lista = ctk.CTkScrollableFrame(self, height=220)
         self.frame_lista.pack(fill="both", expand=True, padx=20, pady=5)
 
-        # Botões de Ação
         frame_botoes = ctk.CTkFrame(self, fg_color="transparent")
         frame_botoes.pack(fill="x", padx=20, pady=10)
 
@@ -247,7 +250,6 @@ class FormEncarteWindow(ctk.CTkToplevel):
         return str(data_obj)
 
     def parse_data_para_iso(self, str_data):
-        # Converte de DD/MM/AAAA ou AAAA-MM-DD para AAAA-MM-DD
         str_data = str_data.strip()
         if '/' in str_data:
             dt = datetime.strptime(str_data, '%d/%m/%Y')
