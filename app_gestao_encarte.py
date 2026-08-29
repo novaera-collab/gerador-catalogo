@@ -111,7 +111,7 @@ class ParametrosWindow(ctk.CTkToplevel):
         self.destroy()
 
 # ==============================================================================
-# JANELA MODAL DE PESQUISA DE PRODUTO (LUPA EM ESPROD)
+# JANELA MODAL DE PESQUISA DE PRODUTO (LUPA EM ESPROD CONCATENADA)
 # ==============================================================================
 class PesquisaProdutoModal(ctk.CTkToplevel):
     def __init__(self, parent, callback_selecao):
@@ -149,16 +149,15 @@ class PesquisaProdutoModal(ctk.CTkToplevel):
             conn = get_connection()
             cur = conn.cursor()
 
+            # Concatenação: fco || fde || fdescricao
             query = """
                 SELECT fco, fde, fdescricao 
                 FROM esprod 
-                WHERE CAST(fco AS TEXT) ILIKE %s 
-                   OR fde ILIKE %s 
-                   OR fdescricao ILIKE %s
+                WHERE COALESCE(CAST(fco AS TEXT), '') || ' ' || COALESCE(fde, '') || ' ' || COALESCE(fdescricao, '') ILIKE %s
                 LIMIT 50
             """
             like_term = f"%{termo}%"
-            cur.execute(query, (like_term, like_term, like_term))
+            cur.execute(query, (like_term,))
             produtos = cur.fetchall()
             conn.close()
 
@@ -296,19 +295,23 @@ class FormEncarteWindow(ctk.CTkToplevel):
 
     def adicionar_item(self):
         cod_raw = self.txt_p_cod.get().strip()
-        preco = self.txt_p_preco.get().strip().replace(',', '.')
+        preco_raw = self.txt_p_preco.get().strip().replace(',', '.')
 
-        if not cod_raw or not preco:
-            messagebox.showwarning("Atenção", "Informe o Código do Produto e o Preço.")
+        if not cod_raw:
+            messagebox.showwarning("Atenção", "Informe o Código do Produto.")
             return
 
         cod_formatted = self.formatar_codigo_5_digitos(cod_raw)
 
-        try:
-            preco_val = float(preco)
-        except ValueError:
-            messagebox.showerror("Erro", "Valor de preço inválido.")
-            return
+        # Trata preço opcional: se em branco, fica 0.00
+        if not preco_raw:
+            preco_val = 0.0
+        else:
+            try:
+                preco_val = float(preco_raw)
+            except ValueError:
+                messagebox.showerror("Erro", "Valor de preço inválido.")
+                return
 
         self.itens.append({'codigo_prod': cod_formatted, 'preco_oferta': preco_val})
         self.atualizar_grid()
@@ -326,7 +329,9 @@ class FormEncarteWindow(ctk.CTkToplevel):
 
             ctk.CTkLabel(f_row, text=f"#{idx+1}", width=50).pack(side="left", padx=5)
             ctk.CTkLabel(f_row, text=f"Código: {item['codigo_prod']}", width=180, anchor="w", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=5)
-            ctk.CTkLabel(f_row, text=f"Preço: R$ {item['preco_oferta']:.2f}", width=150, text_color="#A5D6A7", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=5)
+            
+            lbl_preco = f"R$ {item['preco_oferta']:.2f}" if item['preco_oferta'] > 0 else "Preço Atual (R$ 0.00)"
+            ctk.CTkLabel(f_row, text=lbl_preco, width=180, text_color="#A5D6A7" if item['preco_oferta'] > 0 else "#FFB74D", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=5)
 
             btn_del = ctk.CTkButton(f_row, text="X", width=30, fg_color="#D32F2F", command=lambda i=idx: self.remover_item(i))
             btn_del.pack(side="right", padx=5)
@@ -427,12 +432,12 @@ class FormEncarteWindow(ctk.CTkToplevel):
 class AppPrincipal(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Gestão de Encartes")
-        self.geometry("700x480")
+        self.title("Gestão de Encartes - v2.0 (Atualizado)")
+        self.geometry("750x520")
 
-        # Cabeçalho
+        # Cabeçalho Superior
         frame_topo = ctk.CTkFrame(self)
-        frame_topo.pack(fill="x", padx=15, pady=10)
+        frame_topo.pack(fill="x", padx=15, pady=(10, 5))
 
         ctk.CTkLabel(frame_topo, text="Encartes Cadastrados", font=ctk.CTkFont(size=16, weight="bold")).pack(side="left", padx=10)
         
@@ -441,6 +446,15 @@ class AppPrincipal(ctk.CTk):
 
         btn_novo = ctk.CTkButton(frame_topo, text="➕ Novo Encarte", fg_color="#2E7D32", width=120, command=self.novo_encarte)
         btn_novo.pack(side="right", padx=5, pady=5)
+
+        # BARRA DE PESQUISA POR TÍTULO
+        frame_pesquisa = ctk.CTkFrame(self)
+        frame_pesquisa.pack(fill="x", padx=15, pady=5)
+
+        ctk.CTkLabel(frame_pesquisa, text="🔍 Buscar Encarte:").pack(side="left", padx=10)
+        self.txt_filtro_titulo = ctk.CTkEntry(frame_pesquisa, placeholder_text="Digite o título para filtrar...")
+        self.txt_filtro_titulo.pack(side="left", fill="x", expand=True, padx=5, pady=5)
+        self.txt_filtro_titulo.bind("<KeyRelease>", lambda e: self.carregar_encartes())
 
         # Lista de Encartes
         self.frame_lista = ctk.CTkScrollableFrame(self)
@@ -455,26 +469,51 @@ class AppPrincipal(ctk.CTk):
         for w in self.frame_lista.winfo_children():
             w.destroy()
 
+        filtro = self.txt_filtro_titulo.get().strip() if hasattr(self, 'txt_filtro_titulo') else ""
+
         try:
             conn = get_connection()
             cur = conn.cursor()
-            cur.execute("SELECT id, titulo, data_inicio, data_fim FROM encarte ORDER BY id DESC")
+
+            if filtro:
+                query = "SELECT id, titulo, data_inicio, data_fim FROM encarte WHERE titulo ILIKE %s ORDER BY id DESC"
+                cur.execute(query, (f"%{filtro}%",))
+            else:
+                query = "SELECT id, titulo, data_inicio, data_fim FROM encarte ORDER BY id DESC"
+                cur.execute(query)
+
             encartes = cur.fetchall()
             conn.close()
 
             if not encartes:
-                ctk.CTkLabel(self.frame_lista, text="Nenhum encarte cadastrado.", text_color="gray").pack(pady=20)
+                ctk.CTkLabel(self.frame_lista, text="Nenhum encarte encontrado.", text_color="gray").pack(pady=20)
                 return
+
+            hoje = date.today()
 
             for enc in encartes:
                 row = ctk.CTkFrame(self.frame_lista)
                 row.pack(fill="x", pady=4, padx=5)
 
-                dt_ini = enc['data_inicio'].strftime('%d/%m/%Y') if hasattr(enc['data_inicio'], 'strftime') else str(enc['data_inicio'])
-                dt_fim = enc['data_fim'].strftime('%d/%m/%Y') if hasattr(enc['data_fim'], 'strftime') else str(enc['data_fim'])
+                dt_ini_obj = enc['data_inicio']
+                dt_fim_obj = enc['data_fim']
 
-                lbl_info = f"#{enc['id']} - {enc['titulo']} ({dt_ini} a {dt_fim})"
-                ctk.CTkLabel(row, text=lbl_info, anchor="w", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=10, fill="x", expand=True)
+                dt_ini_str = dt_ini_obj.strftime('%d/%m/%Y') if hasattr(dt_ini_obj, 'strftime') else str(dt_ini_obj)
+                dt_fim_str = dt_fim_obj.strftime('%d/%m/%Y') if hasattr(dt_fim_obj, 'strftime') else str(dt_fim_obj)
+
+                # Tratamento de status: Se data_fim < hoje -> Vermelho (#EF5350), se Ativo -> Verde (#66BB6A)
+                if hasattr(dt_fim_obj, 'year'):
+                    data_vencimento = dt_fim_obj
+                else:
+                    try:
+                        data_vencimento = datetime.strptime(str(dt_fim_obj), '%Y-%m-%d').date()
+                    except Exception:
+                        data_vencimento = hoje
+
+                cor_status = "#EF5350" if data_vencimento < hoje else "#66BB6A"
+
+                lbl_info = f"#{enc['id']} - {enc['titulo']} ({dt_ini_str} a {dt_fim_str})"
+                ctk.CTkLabel(row, text=lbl_info, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=cor_status).pack(side="left", padx=10, fill="x", expand=True)
 
                 btn_editar = ctk.CTkButton(row, text="✏️ Editar", width=70, command=lambda e_id=enc['id']: self.editar_encarte(e_id))
                 btn_editar.pack(side="right", padx=5, pady=5)
