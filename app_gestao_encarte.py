@@ -3,6 +3,25 @@ import os
 import traceback
 from datetime import datetime
 from tkinter import messagebox, Toplevel
+import psycopg2
+from psycopg2.extras import RealDictCursor
+import customtkinter as ctk
+from tkcalendar import DateEntry
+# ==============================================================================
+# CONEXÃO COM O BANCO DE DADOS POSTGRESQL (COLE AQUI!)
+# ==============================================================================
+def get_connection():
+    return psycopg2.connect(
+        host="seu_host_aqui",       # Substitua com os dados reais do seu banco
+        database="seu_banco_aqui",
+        user="seu_usuario_aqui",
+        password="sua_senha_aqui",
+        port="5432",
+        cursor_factory=RealDictCursor
+    )
+
+from datetime import datetime
+from tkinter import messagebox, Toplevel
 
 # 1. CAPTURA DE ERRO FATAL (Deve ficar antes de criar as janelas do Tkinter)
 def mostrar_erro_fatal(exc_type, exc_value, exc_traceback):
@@ -329,3 +348,23 @@ class FormEncarteWindow(ctk.CTkToplevel):
 
         except Exception as e:
             messagebox.showerror("Erro ao Salvar", str(e))
+# ==============================================================================
+# EXECUÇÃO PRINCIPAL DO APLICATIVO
+# ==============================================================================
+if __name__ == "__main__":
+    ctk.set_appearance_mode("Dark")
+    ctk.set_default_color_theme("blue")
+
+    root = ctk.CTk()
+    root.title("Gestão de Encartes")
+    root.geometry("400x200")
+
+    # Botão principal para abrir a janela de encartes
+    btn_abrir = ctk.CTkButton(
+        root, 
+        text="➕ Gerenciar Encartes", 
+        command=lambda: FormEncarteWindow(root)
+    )
+    btn_abrir.pack(expand=True)
+
+    root.mainloop()    
