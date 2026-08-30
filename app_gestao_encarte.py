@@ -65,7 +65,7 @@ class ParametrosWindow(ctk.CTkToplevel):
         super().__init__(parent)
         self.title("Parâmetros do Sistema")
         self.geometry("580x520")
-        self.grab_set()  # Mantém o foco na janela sem bloquear caixas nativas do Windows
+        self.grab_set()
 
         cfg = carregar_config()
 
@@ -585,11 +585,43 @@ class AppPrincipal(ctk.CTk):
                 lbl_info = f"#{enc['id']} - {enc['titulo']} ({dt_ini_str} a {dt_fim_str})"
                 ctk.CTkLabel(row, text=lbl_info, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=cor_status).pack(side="left", padx=10, fill="x", expand=True)
 
-                btn_editar = ctk.CTkButton(row, text="Editar", width=70, command=lambda e_id=enc['id']: self.editar_encarte(e_id))
-                btn_editar.pack(side="right", padx=5, pady=5)
+                # Botão Excluir (Vermelho)
+                btn_excluir = ctk.CTkButton(
+                    row, text="Excluir", width=70, fg_color="#C62828", hover_color="#B71C1C",
+                    command=lambda e_id=enc['id'], e_tit=enc['titulo']: self.excluir_encarte(e_id, e_tit)
+                )
+                btn_excluir.pack(side="right", padx=(2, 5), pady=5)
+
+                # Botão Editar (Azul)
+                btn_editar = ctk.CTkButton(
+                    row, text="Editar", width=70, 
+                    command=lambda e_id=enc['id']: self.editar_encarte(e_id)
+                )
+                btn_editar.pack(side="right", padx=2, pady=5)
 
         except Exception as e:
             ctk.CTkLabel(self.frame_lista, text=f"Erro ao consultar o banco de dados:\n{e}", text_color="#EF5350").pack(pady=20)
+
+    def excluir_encarte(self, encarte_id, titulo):
+        resposta = messagebox.askyesno(
+            "Confirmar Exclusão", 
+            f"Tem certeza que deseja excluir o encarte #{encarte_id} - '{titulo}'?\n\nEsta ação não poderá ser desfeita!"
+        )
+        if resposta:
+            try:
+                conn = get_connection()
+                cur = conn.cursor()
+                
+                cur.execute("DELETE FROM encarte_item WHERE encarte_id = %s", (encarte_id,))
+                cur.execute("DELETE FROM encarte WHERE id = %s", (encarte_id,))
+                
+                conn.commit()
+                conn.close()
+                
+                messagebox.showinfo("Sucesso", "Encarte excluído com sucesso!")
+                self.carregar_encartes()
+            except Exception as e:
+                messagebox.showerror("Erro ao Excluir", f"Ocorreu um erro ao excluir o encarte:\n{e}")
 
     def novo_encarte(self):
         FormEncarteWindow(self, callback_refresh=self.carregar_encartes)
