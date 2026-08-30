@@ -5,6 +5,11 @@ import traceback
 from datetime import datetime, date
 from tkinter import messagebox, Toplevel
 
+# Ocultar o console/terminal do Windows no momento da execução
+if sys.platform.startswith("win"):
+    import ctypes
+    ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
+
 # 1. CAPTURA DE ERRO FATAL NA INICIALIZAÇÃO
 def mostrar_erro_fatal(exc_type, exc_value, exc_traceback):
     erro_msg = "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
@@ -149,7 +154,6 @@ class PesquisaProdutoModal(ctk.CTkToplevel):
             conn = get_connection()
             cur = conn.cursor()
 
-            # Concatenação fco + fdescricao + fcomplemen | Regra CASE WHEN para o nome
             query = """
                 SELECT 
                     fco, 
@@ -209,11 +213,18 @@ class FormEncarteWindow(ctk.CTkToplevel):
             self.carregar_dados()
 
     def criar_widgets(self):
-        lbl_titulo = ctk.CTkLabel(self, text="Manutenção do Encarte", font=ctk.CTkFont(size=20, weight="bold"))
-        lbl_titulo.pack(pady=10, padx=20, anchor="w")
+        # Cabeçalho com botão Voltar
+        frame_top_bar = ctk.CTkFrame(self, fg_color="transparent")
+        frame_top_bar.pack(fill="x", padx=20, pady=(10, 0))
+
+        lbl_titulo = ctk.CTkLabel(frame_top_bar, text="Manutenção do Encarte", font=ctk.CTkFont(size=20, weight="bold"))
+        lbl_titulo.pack(side="left")
+
+        btn_voltar = ctk.CTkButton(frame_top_bar, text="⬅️ Voltar", width=90, fg_color="#455A64", command=self.destroy)
+        btn_voltar.pack(side="right")
 
         frame_head = ctk.CTkFrame(self)
-        frame_head.pack(fill="x", padx=20, pady=5)
+        frame_head.pack(fill="x", padx=20, pady=10)
 
         ctk.CTkLabel(frame_head, text="Título:").grid(row=0, column=0, padx=10, pady=8, sticky="w")
         self.txt_titulo = ctk.CTkEntry(frame_head, width=380, placeholder_text="Ex: ENCARTE FARMAX")
@@ -323,6 +334,16 @@ class FormEncarteWindow(ctk.CTkToplevel):
         self.txt_p_cod.delete(0, 'end')
         self.txt_p_preco.delete(0, 'end')
 
+    def editar_item(self, index):
+        item = self.itens.pop(index)
+        self.txt_p_cod.delete(0, 'end')
+        self.txt_p_cod.insert(0, item['codigo_prod'])
+        
+        self.txt_p_preco.delete(0, 'end')
+        self.txt_p_preco.insert(0, f"{item['preco_oferta']:.2f}")
+        
+        self.atualizar_grid()
+
     def atualizar_grid(self):
         for w in self.frame_lista.winfo_children():
             w.destroy()
@@ -338,7 +359,10 @@ class FormEncarteWindow(ctk.CTkToplevel):
             ctk.CTkLabel(f_row, text=lbl_preco, width=180, text_color="#A5D6A7" if item['preco_oferta'] > 0 else "#FFB74D", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=5)
 
             btn_del = ctk.CTkButton(f_row, text="X", width=30, fg_color="#D32F2F", command=lambda i=idx: self.remover_item(i))
-            btn_del.pack(side="right", padx=5)
+            btn_del.pack(side="right", padx=3)
+
+            btn_edit = ctk.CTkButton(f_row, text="✏️ Editar", width=70, fg_color="#1976D2", command=lambda i=idx: self.editar_item(i))
+            btn_edit.pack(side="right", padx=3)
 
     def remover_item(self, index):
         self.itens.pop(index)
@@ -445,6 +469,9 @@ class AppPrincipal(ctk.CTk):
 
         ctk.CTkLabel(frame_topo, text="Encartes Cadastrados", font=ctk.CTkFont(size=16, weight="bold")).pack(side="left", padx=10)
         
+        btn_sair = ctk.CTkButton(frame_topo, text="❌ Sair", fg_color="#C62828", width=80, command=self.destroy)
+        btn_sair.pack(side="right", padx=5, pady=5)
+
         btn_params = ctk.CTkButton(frame_topo, text="⚙️ Parâmetros", fg_color="#455A64", width=110, command=self.abrir_parametros)
         btn_params.pack(side="right", padx=5, pady=5)
 
@@ -505,7 +532,6 @@ class AppPrincipal(ctk.CTk):
                 dt_ini_str = dt_ini_obj.strftime('%d/%m/%Y') if hasattr(dt_ini_obj, 'strftime') else str(dt_ini_obj)
                 dt_fim_str = dt_fim_obj.strftime('%d/%m/%Y') if hasattr(dt_fim_obj, 'strftime') else str(dt_fim_obj)
 
-                # Tratamento de status: Se data_fim < hoje -> Vermelho (#EF5350), se Ativo -> Verde (#66BB6A)
                 if hasattr(dt_fim_obj, 'year'):
                     data_vencimento = dt_fim_obj
                 else:
