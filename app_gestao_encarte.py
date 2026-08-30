@@ -64,7 +64,7 @@ def get_connection():
 class ParametrosWindow(ctk.CTkToplevel):
     def __init__(self, parent):
         super().__init__(parent)
-        self.title("?? Parâmetros do Sistema")
+        self.title("Parâmetros do Sistema")
         self.geometry("560x520")
         self.grab_set()
 
@@ -109,7 +109,7 @@ class ParametrosWindow(ctk.CTkToplevel):
         self.txt_logo = self._criar_campo_caminho(tab_dirs, "Logo Principal:", 3, cfg.get("path_logo", ""), pasta=False)
         self.txt_logo_whats = self._criar_campo_caminho(tab_dirs, "Logo WhatsApp:", 4, cfg.get("path_logo_whats", ""), pasta=False)
 
-        btn_salvar = ctk.CTkButton(self, text="?? Salvar Tudo", fg_color="#1B5E20", font=ctk.CTkFont(weight="bold"), height=35, command=self.salvar)
+        btn_salvar = ctk.CTkButton(self, text="Salvar Tudo", fg_color="#1B5E20", font=ctk.CTkFont(weight="bold"), height=35, command=self.salvar)
         btn_salvar.pack(pady=(0, 15))
 
     def _criar_campo_caminho(self, parent, label_text, row, valor_inicial, pasta=True):
@@ -119,7 +119,7 @@ class ParametrosWindow(ctk.CTkToplevel):
         txt_entry.grid(row=row, column=1, padx=5, pady=6)
 
         btn_procurar = ctk.CTkButton(
-            parent, text="??", width=35,
+            parent, text="...", width=35, 
             command=lambda: self._selecionar_caminho(txt_entry, pasta)
         )
         btn_procurar.grid(row=row, column=2, padx=5, pady=6)
@@ -127,13 +127,20 @@ class ParametrosWindow(ctk.CTkToplevel):
 
     def _selecionar_caminho(self, entry_widget, pasta=True):
         if pasta:
-            caminho = filedialog.askdirectory(title="Selecione a Pasta")
+            caminho = filedialog.askdirectory(parent=self, title="Selecione a Pasta")
         else:
-            caminho = filedialog.askopenfilename(title="Selecione a Imagem", filetypes=[("Imagens", "*.png *.jpg *.jpeg")])
-
+            caminho = filedialog.askopenfilename(
+                parent=self, 
+                title="Selecione a Imagem", 
+                filetypes=[("Arquivos de Imagem", "*.png *.jpg *.jpeg"), ("Todos os Arquivos", "*.*")]
+            )
+        
         if caminho:
+            # Padroniza as barras no formato Windows (ex: F:\UNICO)
+            caminho_formatado = caminho.replace("/", "\\")
             entry_widget.delete(0, "end")
-            entry_widget.insert(0, caminho)
+            entry_widget.insert(0, caminho_formatado)
+            self.lift()
 
     def salvar(self):
         cfg = {
