@@ -1,13 +1,14 @@
 import sys
 import os
 import io
+import csv
 import webbrowser
 import urllib.parse
 import tkinter as tk
 from tkinter import messagebox
 from PIL import Image, ImageTk
 
-# Biblioteca do Windows para manipular area de transferencia
+# Biblioteca do Windows para manipular área de transferência
 try:
     import win32clipboard
     WIN32_DISPONIVEL = True
@@ -15,7 +16,7 @@ except ImportError:
     WIN32_DISPONIVEL = False
 
 def copiar_imagem_para_clipboard(caminho_img):
-    """Copia o arquivo JPG diretamente para a memoria do Windows (CTRL+V)"""
+    """Copia o arquivo JPG diretamente para a memória do Windows (CTRL+V)"""
     if not os.path.exists(caminho_img):
         return False
 
@@ -32,44 +33,57 @@ def copiar_imagem_para_clipboard(caminho_img):
             win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data)
             win32clipboard.CloseClipboard()
             return True
-        except Exception as e:
+        except Exception:
             return False
     else:
-        # Fallback usando PowerShell se pywin32 nao estiver instalado
+        # Fallback usando PowerShell se pywin32 não estiver instalado
         try:
             cmd = f'powershell -command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Clipboard]::SetImage([System.Drawing.Image]::FromFile(\'{caminho_img}\'))"'
             os.system(cmd)
             return True
-        except:
+        except Exception:
             return False
 
 def ler_metadados_csv(csv_path):
-    meta = {'fone': '', 'rodape': '', 'titulo': '', 'saida_jpg': '', 'validade': '', 'logo': ''}
+    """
+    Lê o cabeçalho/metadados do CSV gerado.
+    Identifica o campo 'contato_whatsapp' da consulta SQL.
+    """
+    meta = {'fone': '', 'nome_contato': '', 'titulo': 'Encarte de Ofertas', 'saida_jpg': ''}
     if not os.path.exists(csv_path):
         return meta
 
     try:
-        with open(csv_path, mode='r', encoding='latin-1') as f:
-            linhas = [line.strip() for line in f if line.strip()]
-    except:
-        return meta
+        # Tenta ler em UTF-8 (padrão) ou Latin-1 como fallback
+        for enc in ['utf-8-sig', 'utf-8', 'latin-1']:
+            try:
+                with open(csv_path, mode='r', encoding=enc) as f:
+                    reader = csv.DictReader(f, delimiter=',')
+                    # Limpa espaços e lowercase nos nomes das colunas
+                    if reader.fieldnames:
+                        field_map = {col.strip().lower().replace('\ufeff', ''): col for col in reader.fieldnames}
+                        
+                        first_row = next(reader, None)
+                        if first_row and 'contato_whatsapp' in field_map:
+                            raw_whatsapp = first_row.get(field_map['contato_whatsapp'], '').strip()
+                            
+                            # Trata formato "Nome - (XX) 99999-9999" ou apenas "(XX) 99999-9999"
+                            if ' - ' in raw_whatsapp:
+                                partes = raw_whatsapp.split(' - ', 1)
+                                meta['nome_contato'] = partes[0].strip()
+                                meta['fone'] = partes[1].strip()
+                            else:
+                                meta['fone'] = raw_whatsapp
+                            break
+            except Exception:
+                continue
+    except Exception:
+        pass
 
-    for linha in linhas:
-        if linha.lower().startswith('validade:'):
-            partes_v = linha.split(':', 1)
-            meta['validade'] = partes_v[1].strip()
-            continue
-
-        colunas = linha.split(';')
-        col0 = colunas[0].lower().strip().replace(':', '')
-        if col0 in ['codigo', 'fco', 'code']:
-            break
-        if len(colunas) > 1:
-            meta[col0] = colunas[1].strip()
-            
     return meta
 
 def limpar_numero_whatsapp(fone_raw):
+    """Remove caracteres especiais e garante o DDD 55 (Brasil)"""
     apenas_numeros = "".join(c for c in fone_raw if c.isdigit())
     if not apenas_numeros:
         return ""
@@ -78,26 +92,22 @@ def limpar_numero_whatsapp(fone_raw):
     return apenas_numeros
 
 class AppVisualizador:
-    def __init__(self, root, csv_path):
+    def __init__(self, root, pasta_parametros="", jpg_path=""):
         self.root = root
-        self.csv_path = csv_path
-        self.meta = ler_metadados_csv(csv_path)
+        self.jpg_path = jpg_path
         
-        self.jpg_path = ""
-        if len(sys.argv) > 2 and sys.argv[2].strip():
-            self.jpg_path = sys.argv[2].strip()
-        elif self.meta.get('saida_jpg'):
-            self.jpg_path = self.meta.get('saida_jpg')
-        else:
-            user_profile = os.environ.get('USERPROFILE', 'C:\\')
-            self.jpg_path = os.path.join(user_profile, 'Downloads', 'CATALOGO_OESTE_PHARMA.JPG')
+        # Define caminho do CSV associado para ler os metadados de contato
+        base_path = os.path.splitext(self.jpg_path)[0] if self.jpg_path else ""
+        self.csv_path = f"{base_path}.csv" if base_path else ""
 
+        self.meta = ler_metadados_csv(self.csv_path)
         self.num_whats = limpar_numero_whatsapp(self.meta.get('fone', ''))
 
         self.root.title("Visualizador de Encarte - Oeste Pharma")
         self.root.geometry("1000x750")
         self.root.configure(bg="#f0f0f0")
         
+        # Traz a janela para frente
         self.root.lift()
         self.root.attributes('-topmost', True)
         self.root.after_idle(self.root.attributes, '-topmost', False)
@@ -139,14 +149,20 @@ class AppVisualizador:
         if os.path.exists(self.jpg_path):
             self.carregar_imagem()
         else:
-            self.canvas.create_text(500, 350, text=f"Arquivo JPG não encontrado em:\n{self.jpg_path}", fill="white", font=("Arial", 14), justify="center")
+            self.canvas.create_text(
+                500, 350, 
+                text=f"Arquivo JPG não encontrado em:\n{self.jpg_path}", 
+                fill="white", 
+                font=("Arial", 14), 
+                justify="center"
+            )
 
     def carregar_imagem(self):
         self.pil_img = Image.open(self.jpg_path)
         
         img_w, img_h = self.pil_img.size
         max_w, max_h = 960, 640
-        ratio = min(max_w/img_w, max_h/img_h)
+        ratio = min(max_w / img_w, max_h / img_h)
         novo_tamanho = (int(img_w * ratio), int(img_h * ratio))
 
         img_resized = self.pil_img.resize(novo_tamanho, Image.Resampling.LANCZOS)
@@ -155,7 +171,7 @@ class AppVisualizador:
         self.canvas.create_image(500, 330, image=self.tk_img, anchor="center")
 
     def abrir_whatsapp(self):
-        # 1. Copia a imagem para o clipboard do Windows (CTRL+V)
+        # 1. Copia a imagem para a área de transferência do Windows (CTRL+V)
         copiou = copiar_imagem_para_clipboard(self.jpg_path)
 
         if copiou:
@@ -165,23 +181,31 @@ class AppVisualizador:
                 "Ao abrir o WhatsApp, basta pressionar CTRL + V na conversa para colar a imagem!"
             )
 
-        # 2. Abre a conversa no WhatsApp
+        # 2. Abre a conversa direta no WhatsApp
+        nome_contato = self.meta.get('nome_contato', '')
+        saudacao = f"Olá {nome_contato}!" if nome_contato else "Olá!"
+        mensagem = f"{saudacao} Segue nosso {self.meta.get('titulo', 'Encarte de Ofertas')}."
+        msg_encoded = urllib.parse.quote(mensagem)
+
         if self.num_whats:
-            mensagem = f"Olá! Segue nosso {self.meta.get('titulo', 'Encarte de Ofertas')}."
-            msg_encoded = urllib.parse.quote(mensagem)
             url = f"https://api.whatsapp.com/send?phone={self.num_whats}&text={msg_encoded}"
             webbrowser.open(url)
         else:
-            # Caso não tenha telefone no CSV, abre o WhatsApp Web geral
             webbrowser.open("https://web.whatsapp.com")
 
     def abrir_pasta(self):
         if os.path.exists(self.jpg_path):
             os.system(f'explorer /select,"{os.path.abspath(self.jpg_path)}"')
+        elif os.path.exists(os.path.dirname(self.jpg_path)):
+            os.system(f'explorer "{os.path.abspath(os.path.dirname(self.jpg_path))}"')
 
 if __name__ == "__main__":
-    csv_file = sys.argv[1] if len(sys.argv) > 1 else "F:\\UNICO\\ENCARTE\\DADOS_CATALOGO.CSV"
+    # Tratamento dos argumentos da chamada de sistema:
+    # arg 1: Pasta de parâmetros / saída
+    # arg 2: Caminho completo do arquivo JPG gerado
+    pasta_param = sys.argv[1] if len(sys.argv) > 1 else os.getcwd()
+    arquivo_jpg = sys.argv[2] if len(sys.argv) > 2 else os.path.join(pasta_param, "catalogo_encarte.jpg")
 
     root = tk.Tk()
-    app = AppVisualizador(root, csv_file)
+    app = AppVisualizador(root, pasta_parametros=pasta_param, jpg_path=arquivo_jpg)
     root.mainloop()
