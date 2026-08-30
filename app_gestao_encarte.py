@@ -15,7 +15,6 @@ if sys.platform.startswith("win"):
     import ctypes
     ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
 
-# 1. CAPTURA DE ERRO FATAL NA INICIALIZAÇÃO
 def mostrar_erro_fatal(exc_type, exc_value, exc_traceback):
     erro_msg = "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
     messagebox.showerror("Erro Fatal na Inicialização", f"Ocorreu um erro ao abrir o app:\n\n{erro_msg}")
@@ -36,16 +35,14 @@ def carregar_config():
         "database": "seu_banco",
         "user": "postgres",
         "password": "sua_senha",
-        "port": "5432"
+        "port": "5432",
+        "schema": "public"
     }
 
 def salvar_config(cfg):
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(cfg, f, indent=4)
 
-# ==============================================================================
-# CONEXÃO COM O BANCO DE DADOS POSTGRESQL
-# ==============================================================================
 def get_connection():
     cfg = carregar_config()
     return psycopg2.connect(
@@ -57,6 +54,11 @@ def get_connection():
         cursor_factory=RealDictCursor
     )
 
+def get_schema():
+    cfg = carregar_config()
+    schema = cfg.get("schema", "public").strip()
+    return schema if schema else "public"
+
 # ==============================================================================
 # JANELA DE PARÂMETROS DA CONEXÃO E DIRETÓRIOS
 # ==============================================================================
@@ -64,7 +66,7 @@ class ParametrosWindow(ctk.CTkToplevel):
     def __init__(self, parent):
         super().__init__(parent)
         self.title("Parâmetros do Sistema")
-        self.geometry("580x520")
+        self.geometry("580x560")
         self.grab_set()
 
         cfg = carregar_config()
@@ -86,20 +88,25 @@ class ParametrosWindow(ctk.CTkToplevel):
         self.txt_db.insert(0, cfg.get("database", ""))
         self.txt_db.grid(row=1, column=1, padx=10, pady=8)
 
-        ctk.CTkLabel(tab_banco, text="Usuário:").grid(row=2, column=0, padx=10, pady=8, sticky="w")
+        ctk.CTkLabel(tab_banco, text="Schema:").grid(row=2, column=0, padx=10, pady=8, sticky="w")
+        self.txt_schema = ctk.CTkEntry(tab_banco, width=280, placeholder_text="ex: public ou encartes_app")
+        self.txt_schema.insert(0, cfg.get("schema", "public"))
+        self.txt_schema.grid(row=2, column=1, padx=10, pady=8)
+
+        ctk.CTkLabel(tab_banco, text="Usuário:").grid(row=3, column=0, padx=10, pady=8, sticky="w")
         self.txt_user = ctk.CTkEntry(tab_banco, width=280)
         self.txt_user.insert(0, cfg.get("user", ""))
-        self.txt_user.grid(row=2, column=1, padx=10, pady=8)
+        self.txt_user.grid(row=3, column=1, padx=10, pady=8)
 
-        ctk.CTkLabel(tab_banco, text="Senha:").grid(row=3, column=0, padx=10, pady=8, sticky="w")
+        ctk.CTkLabel(tab_banco, text="Senha:").grid(row=4, column=0, padx=10, pady=8, sticky="w")
         self.txt_pass = ctk.CTkEntry(tab_banco, width=280, show="*")
         self.txt_pass.insert(0, cfg.get("password", ""))
-        self.txt_pass.grid(row=3, column=1, padx=10, pady=8)
+        self.txt_pass.grid(row=4, column=1, padx=10, pady=8)
 
-        ctk.CTkLabel(tab_banco, text="Porta:").grid(row=4, column=0, padx=10, pady=8, sticky="w")
+        ctk.CTkLabel(tab_banco, text="Porta:").grid(row=5, column=0, padx=10, pady=8, sticky="w")
         self.txt_port = ctk.CTkEntry(tab_banco, width=280)
         self.txt_port.insert(0, cfg.get("port", "5432"))
-        self.txt_port.grid(row=4, column=1, padx=10, pady=8)
+        self.txt_port.grid(row=5, column=1, padx=10, pady=8)
 
         # --- ABA 2: DIRETÓRIOS E LOGOS ---
         self.txt_dir_encarte = self._criar_campo_caminho(tab_dirs, "Diretório Encarte:", 0, cfg.get("dir_encarte", ""), pasta=True)
@@ -143,6 +150,7 @@ class ParametrosWindow(ctk.CTkToplevel):
         cfg = {
             "host": self.txt_host.get().strip(),
             "database": self.txt_db.get().strip(),
+            "schema": self.txt_schema.get().strip(),
             "user": self.txt_user.get().strip(),
             "password": self.txt_pass.get().strip(),
             "port": self.txt_port.get().strip(),
@@ -246,7 +254,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
         self.itens = []
 
         self.title("Alteração de Encarte" if encarte_id else "Novo Encarte")
-        self.geometry("800x650")
+        self.geometry("820x650")
         self.grab_set()
 
         self.criar_widgets()
@@ -282,24 +290,31 @@ class FormEncarteWindow(ctk.CTkToplevel):
         btn_cal_fim = ctk.CTkButton(frame_head, text="Cal", width=35, command=lambda: self.abrir_calendario(self.txt_dt_fim))
         btn_cal_fim.grid(row=1, column=3, padx=(135, 0), pady=8, sticky="w")
 
+        # PAINEL DE INCLUSÃO DE PRODUTO
         frame_prod = ctk.CTkFrame(self)
         frame_prod.pack(fill="x", padx=20, pady=10)
 
         ctk.CTkLabel(frame_prod, text="Cód. Prod:").grid(row=0, column=0, padx=5, pady=5)
         
-        self.txt_p_cod = ctk.CTkEntry(frame_prod, width=90, placeholder_text="00001")
+        self.txt_p_cod = ctk.CTkEntry(frame_prod, width=80, placeholder_text="00001")
         self.txt_p_cod.grid(row=0, column=1, padx=(5, 2), pady=5)
         self.txt_p_cod.bind("<FocusOut>", self.formatar_codigo_evento)
 
         btn_lupa = ctk.CTkButton(frame_prod, text="Lupa", width=45, fg_color="#1976D2", command=self.abrir_lupa)
         btn_lupa.grid(row=0, column=2, padx=(0, 10), pady=5)
 
-        ctk.CTkLabel(frame_prod, text="Preço Oferta (R$):").grid(row=0, column=3, padx=5, pady=5)
-        self.txt_p_preco = ctk.CTkEntry(frame_prod, width=110, placeholder_text="0.00")
-        self.txt_p_preco.grid(row=0, column=4, padx=5, pady=5)
+        ctk.CTkLabel(frame_prod, text="A partir de:").grid(row=0, column=3, padx=2, pady=5)
+        self.txt_p_qtde = ctk.CTkEntry(frame_prod, width=65, placeholder_text="1.00")
+        self.txt_p_qtde.insert(0, "1")
+        self.txt_p_qtde.grid(row=0, column=4, padx=(2, 2), pady=5)
+        ctk.CTkLabel(frame_prod, text="unid.", text_color="gray").grid(row=0, column=5, padx=(0, 10), pady=5)
 
-        btn_add = ctk.CTkButton(frame_prod, text="+ Adicionar", width=100, fg_color="#2E7D32", command=self.adicionar_item)
-        btn_add.grid(row=0, column=5, padx=15, pady=5)
+        ctk.CTkLabel(frame_prod, text="Valor da Oferta (R$):").grid(row=0, column=6, padx=2, pady=5)
+        self.txt_p_preco = ctk.CTkEntry(frame_prod, width=90, placeholder_text="0.00")
+        self.txt_p_preco.grid(row=0, column=7, padx=5, pady=5)
+
+        btn_add = ctk.CTkButton(frame_prod, text="+ Adicionar", width=90, fg_color="#2E7D32", command=self.adicionar_item)
+        btn_add.grid(row=0, column=8, padx=10, pady=5)
 
         self.frame_lista = ctk.CTkScrollableFrame(self, height=220)
         self.frame_lista.pack(fill="both", expand=True, padx=20, pady=5)
@@ -351,6 +366,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
 
     def adicionar_item(self):
         cod_raw = self.txt_p_cod.get().strip()
+        qtde_raw = self.txt_p_qtde.get().strip().replace(',', '.')
         preco_raw = self.txt_p_preco.get().strip().replace(',', '.')
 
         if not cod_raw:
@@ -358,6 +374,14 @@ class FormEncarteWindow(ctk.CTkToplevel):
             return
 
         cod_formatted = self.formatar_codigo_5_digitos(cod_raw)
+
+        try:
+            qtde_val = float(qtde_raw) if qtde_raw else 1.0
+            if qtde_val <= 0:
+                qtde_val = 1.0
+        except ValueError:
+            messagebox.showerror("Erro", "Quantidade inválida.")
+            return
 
         if not preco_raw:
             preco_val = 0.0
@@ -368,10 +392,16 @@ class FormEncarteWindow(ctk.CTkToplevel):
                 messagebox.showerror("Erro", "Valor de preço inválido.")
                 return
 
-        self.itens.append({'codigo_prod': cod_formatted, 'preco_oferta': preco_val})
+        self.itens.append({
+            'codigo_prod': cod_formatted, 
+            'qtde_oferta': qtde_val, 
+            'preco_oferta': preco_val
+        })
         self.atualizar_grid()
 
         self.txt_p_cod.delete(0, 'end')
+        self.txt_p_qtde.delete(0, 'end')
+        self.txt_p_qtde.insert(0, "1")
         self.txt_p_preco.delete(0, 'end')
 
     def editar_item(self, index):
@@ -379,6 +409,9 @@ class FormEncarteWindow(ctk.CTkToplevel):
         self.txt_p_cod.delete(0, 'end')
         self.txt_p_cod.insert(0, item['codigo_prod'])
         
+        self.txt_p_qtde.delete(0, 'end')
+        self.txt_p_qtde.insert(0, f"{item['qtde_oferta']:.2f}".rstrip('0').rstrip('.'))
+
         self.txt_p_preco.delete(0, 'end')
         self.txt_p_preco.insert(0, f"{item['preco_oferta']:.2f}")
         
@@ -392,16 +425,19 @@ class FormEncarteWindow(ctk.CTkToplevel):
             f_row = ctk.CTkFrame(self.frame_lista)
             f_row.pack(fill="x", pady=2, padx=5)
 
-            ctk.CTkLabel(f_row, text=f"#{idx+1}", width=50).pack(side="left", padx=5)
-            ctk.CTkLabel(f_row, text=f"Código: {item['codigo_prod']}", width=180, anchor="w", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=5)
+            ctk.CTkLabel(f_row, text=f"#{idx+1}", width=40).pack(side="left", padx=5)
+            ctk.CTkLabel(f_row, text=f"Código: {item['codigo_prod']}", width=140, anchor="w", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=5)
             
+            qtde_str = f"{item['qtde_oferta']:.2f}".rstrip('0').rstrip('.')
+            ctk.CTkLabel(f_row, text=f"A partir de {qtde_str} un.", width=140, anchor="w", text_color="#81D4FA").pack(side="left", padx=5)
+
             lbl_preco = f"R$ {item['preco_oferta']:.2f}" if item['preco_oferta'] > 0 else "Preço Atual (R$ 0.00)"
-            ctk.CTkLabel(f_row, text=lbl_preco, width=180, text_color="#A5D6A7" if item['preco_oferta'] > 0 else "#FFB74D", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=5)
+            ctk.CTkLabel(f_row, text=lbl_preco, width=160, text_color="#A5D6A7" if item['preco_oferta'] > 0 else "#FFB74D", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=5)
 
             btn_del = ctk.CTkButton(f_row, text="X", width=30, fg_color="#D32F2F", command=lambda i=idx: self.remover_item(i))
             btn_del.pack(side="right", padx=3)
 
-            btn_edit = ctk.CTkButton(f_row, text="Editar", width=70, fg_color="#1976D2", command=lambda i=idx: self.editar_item(i))
+            btn_edit = ctk.CTkButton(f_row, text="Editar", width=65, fg_color="#1976D2", command=lambda i=idx: self.editar_item(i))
             btn_edit.pack(side="right", padx=3)
 
     def remover_item(self, index):
@@ -421,10 +457,11 @@ class FormEncarteWindow(ctk.CTkToplevel):
         return str_data
 
     def carregar_dados(self):
+        schema = get_schema()
         try:
             conn = get_connection()
             cur = conn.cursor()
-            cur.execute("SELECT * FROM encarte WHERE id = %s", (self.encarte_id,))
+            cur.execute(f"SELECT * FROM {schema}.encarte WHERE id = %s", (self.encarte_id,))
             enc = cur.fetchone()
 
             if enc:
@@ -432,9 +469,13 @@ class FormEncarteWindow(ctk.CTkToplevel):
                 self.txt_dt_ini.insert(0, self.converter_data_para_br(enc['data_inicio']))
                 self.txt_dt_fim.insert(0, self.converter_data_para_br(enc['data_fim']))
 
-                cur.execute("SELECT codigo_prod, preco_oferta FROM encarte_item WHERE encarte_id = %s ORDER BY ordem, id", (self.encarte_id,))
+                cur.execute(f"SELECT codigo_prod, qtde_oferta, preco_oferta FROM {schema}.encarte_item WHERE encarte_id = %s ORDER BY ordem, id", (self.encarte_id,))
                 itens_bd = cur.fetchall()
-                self.itens = [{'codigo_prod': self.formatar_codigo_5_digitos(str(i['codigo_prod'])), 'preco_oferta': float(i['preco_oferta'])} for i in itens_bd]
+                self.itens = [{
+                    'codigo_prod': self.formatar_codigo_5_digitos(str(i['codigo_prod'])), 
+                    'qtde_oferta': float(i.get('qtde_oferta', 1.0)),
+                    'preco_oferta': float(i['preco_oferta'])
+                } for i in itens_bd]
                 self.atualizar_grid()
 
             conn.close()
@@ -442,6 +483,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
             messagebox.showerror("Erro ao Carregar", str(e))
 
     def salvar_banco(self):
+        schema = get_schema()
         titulo = self.txt_titulo.get().strip()
         dt_ini_raw = self.txt_dt_ini.get().strip()
         dt_fim_raw = self.txt_dt_fim.get().strip()
@@ -462,26 +504,26 @@ class FormEncarteWindow(ctk.CTkToplevel):
             cur = conn.cursor()
 
             if self.encarte_id:
-                cur.execute("""
-                    UPDATE encarte 
+                cur.execute(f"""
+                    UPDATE {schema}.encarte 
                     SET titulo=%s, data_inicio=%s, data_fim=%s 
                     WHERE id=%s
                 """, (titulo, dt_ini_iso, dt_fim_iso, self.encarte_id))
                 
-                cur.execute("DELETE FROM encarte_item WHERE encarte_id=%s", (self.encarte_id,))
+                cur.execute(f"DELETE FROM {schema}.encarte_item WHERE encarte_id=%s", (self.encarte_id,))
                 enc_id = self.encarte_id
             else:
-                cur.execute("""
-                    INSERT INTO encarte (titulo, data_inicio, data_fim) 
+                cur.execute(f"""
+                    INSERT INTO {schema}.encarte (titulo, data_inicio, data_fim) 
                     VALUES (%s, %s, %s) RETURNING id
                 """, (titulo, dt_ini_iso, dt_fim_iso))
                 enc_id = cur.fetchone()['id']
 
             for idx, item in enumerate(self.itens):
-                cur.execute("""
-                    INSERT INTO encarte_item (encarte_id, codigo_prod, preco_oferta, ordem) 
-                    VALUES (%s, %s, %s, %s)
-                """, (enc_id, item['codigo_prod'], item['preco_oferta'], idx))
+                cur.execute(f"""
+                    INSERT INTO {schema}.encarte_item (encarte_id, codigo_prod, qtde_oferta, preco_oferta, ordem) 
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (enc_id, item['codigo_prod'], item['qtde_oferta'], item['preco_oferta'], idx))
 
             conn.commit()
             conn.close()
@@ -540,6 +582,7 @@ class AppPrincipal(ctk.CTk):
         for w in self.frame_lista.winfo_children():
             w.destroy()
 
+        schema = get_schema()
         filtro = self.txt_filtro_titulo.get().strip() if hasattr(self, 'txt_filtro_titulo') else ""
 
         try:
@@ -547,10 +590,10 @@ class AppPrincipal(ctk.CTk):
             cur = conn.cursor()
 
             if filtro:
-                query = "SELECT id, titulo, data_inicio, data_fim FROM encarte WHERE titulo ILIKE %s ORDER BY id DESC"
+                query = f"SELECT id, titulo, data_inicio, data_fim FROM {schema}.encarte WHERE titulo ILIKE %s ORDER BY id DESC"
                 cur.execute(query, (f"%{filtro}%",))
             else:
-                query = "SELECT id, titulo, data_inicio, data_fim FROM encarte ORDER BY id DESC"
+                query = f"SELECT id, titulo, data_inicio, data_fim FROM {schema}.encarte ORDER BY id DESC"
                 cur.execute(query)
 
             encartes = cur.fetchall()
@@ -585,14 +628,14 @@ class AppPrincipal(ctk.CTk):
                 lbl_info = f"#{enc['id']} - {enc['titulo']} ({dt_ini_str} a {dt_fim_str})"
                 ctk.CTkLabel(row, text=lbl_info, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=cor_status).pack(side="left", padx=10, fill="x", expand=True)
 
-                # Botão Excluir (Vermelho)
+                # Botão Excluir
                 btn_excluir = ctk.CTkButton(
                     row, text="Excluir", width=70, fg_color="#C62828", hover_color="#B71C1C",
                     command=lambda e_id=enc['id'], e_tit=enc['titulo']: self.excluir_encarte(e_id, e_tit)
                 )
                 btn_excluir.pack(side="right", padx=(2, 5), pady=5)
 
-                # Botão Editar (Azul)
+                # Botão Editar
                 btn_editar = ctk.CTkButton(
                     row, text="Editar", width=70, 
                     command=lambda e_id=enc['id']: self.editar_encarte(e_id)
@@ -603,6 +646,7 @@ class AppPrincipal(ctk.CTk):
             ctk.CTkLabel(self.frame_lista, text=f"Erro ao consultar o banco de dados:\n{e}", text_color="#EF5350").pack(pady=20)
 
     def excluir_encarte(self, encarte_id, titulo):
+        schema = get_schema()
         resposta = messagebox.askyesno(
             "Confirmar Exclusão", 
             f"Tem certeza que deseja excluir o encarte #{encarte_id} - '{titulo}'?\n\nEsta ação não poderá ser desfeita!"
@@ -612,8 +656,8 @@ class AppPrincipal(ctk.CTk):
                 conn = get_connection()
                 cur = conn.cursor()
                 
-                cur.execute("DELETE FROM encarte_item WHERE encarte_id = %s", (encarte_id,))
-                cur.execute("DELETE FROM encarte WHERE id = %s", (encarte_id,))
+                cur.execute(f"DELETE FROM {schema}.encarte_item WHERE encarte_id = %s", (encarte_id,))
+                cur.execute(f"DELETE FROM {schema}.encarte WHERE id = %s", (encarte_id,))
                 
                 conn.commit()
                 conn.close()
