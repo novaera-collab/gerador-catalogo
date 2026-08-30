@@ -187,7 +187,7 @@ class ParametrosWindow(ctk.CTkToplevel):
             "path_logo_whats": self.txt_logo_whats.get().strip()
         }
         salvar_config(cfg)
-        messagebox.showinfo("Sucesso", "Todos os parâmetros foram salvos!")
+        messagebox.showinfo("Sucesso", "Todos os parâmetros foram salvos!", parent=self)
         self.destroy()
 
 # ==============================================================================
@@ -263,7 +263,7 @@ class PesquisaProdutoModal(ctk.CTkToplevel):
                 btn_sel.pack(side="right", padx=5)
 
         except Exception as e:
-            messagebox.showerror("Erro na Pesquisa", f"Erro ao consultar esprod:\n{e}")
+            messagebox.showerror("Erro na Pesquisa", f"Erro ao consultar esprod:\n{e}", parent=self)
 
     def selecionar(self, codigo_formatted):
         self.callback_selecao(codigo_formatted)
@@ -398,7 +398,8 @@ class FormEncarteWindow(ctk.CTkToplevel):
         preco_raw = self.txt_p_preco.get().strip().replace(',', '.')
 
         if not cod_raw:
-            messagebox.showwarning("Atenção", "Informe o Código do Produto.")
+            messagebox.showwarning("Atenção", "Informe o Código do Produto.", parent=self)
+            self.txt_p_cod.focus()
             return
 
         cod_formatted = self.formatar_codigo_5_digitos(cod_raw)
@@ -408,17 +409,20 @@ class FormEncarteWindow(ctk.CTkToplevel):
             if qtde_val <= 0:
                 qtde_val = 1.0
         except ValueError:
-            messagebox.showerror("Erro", "Quantidade inválida.")
+            messagebox.showerror("Erro", "Quantidade inválida.", parent=self)
+            self.txt_p_qtde.focus()
             return
 
-        # Validação de Duplicidade
+        # Validação de Duplicidade (vinculado a parent=self)
         for item in self.itens:
             if item['codigo_prod'] == cod_formatted and item['qtde_oferta'] == qtde_val:
                 messagebox.showwarning(
                     "Produto Duplicado",
                     f"O produto {cod_formatted} já está cadastrado com a quantidade {qtde_val:.2f}.\n\n"
-                    "Para incluir o mesmo produto, as quantidades precisam ser diferentes."
+                    "Para incluir o mesmo produto, as quantidades precisam ser diferentes.",
+                    parent=self
                 )
+                self.txt_p_cod.focus()
                 return
 
         if not preco_raw:
@@ -427,7 +431,8 @@ class FormEncarteWindow(ctk.CTkToplevel):
             try:
                 preco_val = float(preco_raw)
             except ValueError:
-                messagebox.showerror("Erro", "Valor de preço inválido.")
+                messagebox.showerror("Erro", "Valor de preço inválido.", parent=self)
+                self.txt_p_preco.focus()
                 return
 
         # Adiciona no INÍCIO da lista (Ordem Descendente)
@@ -438,10 +443,12 @@ class FormEncarteWindow(ctk.CTkToplevel):
         })
         self.atualizar_grid()
 
+        # Limpa e foca no campo para inserção contínua
         self.txt_p_cod.delete(0, 'end')
         self.txt_p_qtde.delete(0, 'end')
         self.txt_p_qtde.insert(0, "1")
         self.txt_p_preco.delete(0, 'end')
+        self.txt_p_cod.focus()
 
     def editar_item(self, index):
         item = self.itens.pop(index)
@@ -521,7 +528,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
 
             conn.close()
         except Exception as e:
-            messagebox.showerror("Erro ao Carregar", str(e))
+            messagebox.showerror("Erro ao Carregar", str(e), parent=self)
 
     def salvar_banco(self):
         schema = get_schema()
@@ -530,14 +537,14 @@ class FormEncarteWindow(ctk.CTkToplevel):
         dt_fim_raw = self.txt_dt_fim.get().strip()
 
         if not titulo or not dt_ini_raw or not dt_fim_raw or not self.itens:
-            messagebox.showwarning("Atenção", "Preencha o cabeçalho e insira ao menos 1 produto.")
+            messagebox.showwarning("Atenção", "Preencha o cabeçalho e insira ao menos 1 produto.", parent=self)
             return
 
         try:
             dt_ini_iso = self.parse_data_para_iso(dt_ini_raw)
             dt_fim_iso = self.parse_data_para_iso(dt_fim_raw)
         except Exception:
-            messagebox.showerror("Data Inválida", "Informe a data no padrão brasileiro DD/MM/AAAA (ex: 29/08/2026).")
+            messagebox.showerror("Data Inválida", "Informe a data no padrão brasileiro DD/MM/AAAA (ex: 29/08/2026).", parent=self)
             return
 
         conn = None
@@ -580,7 +587,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
             conn.commit()
             conn.close()
 
-            messagebox.showinfo("Sucesso", "Encarte gravado com sucesso!")
+            messagebox.showinfo("Sucesso", "Encarte gravado com sucesso!", parent=self)
             if self.callback_refresh:
                 self.callback_refresh()
             self.destroy()
@@ -589,7 +596,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
             if conn:
                 conn.rollback()
                 conn.close()
-            messagebox.showerror("Erro ao Salvar", f"Falha na transação:\n{e}")
+            messagebox.showerror("Erro ao Salvar", f"Falha na transação:\n{e}", parent=self)
 
 # ==============================================================================
 # TELA PRINCIPAL DO APLICATIVO
@@ -699,7 +706,8 @@ class AppPrincipal(ctk.CTk):
         schema = get_schema()
         resposta = messagebox.askyesno(
             "Confirmar Exclusão", 
-            f"Tem certeza que deseja excluir o encarte #{encarte_id} - '{titulo}'?\n\nEsta ação não poderá ser desfeita!"
+            f"Tem certeza que deseja excluir o encarte #{encarte_id} - '{titulo}'?\n\nEsta ação não poderá ser desfeita!",
+            parent=self
         )
         if resposta:
             try:
@@ -712,10 +720,10 @@ class AppPrincipal(ctk.CTk):
                 conn.commit()
                 conn.close()
                 
-                messagebox.showinfo("Sucesso", "Encarte excluído com sucesso!")
+                messagebox.showinfo("Sucesso", "Encarte excluído com sucesso!", parent=self)
                 self.carregar_encartes()
             except Exception as e:
-                messagebox.showerror("Erro ao Excluir", f"Ocorreu um erro ao excluir o encarte:\n{e}")
+                messagebox.showerror("Erro ao Excluir", f"Ocorreu um erro ao excluir o encarte:\n{e}", parent=self)
 
     def novo_encarte(self):
         FormEncarteWindow(self, callback_refresh=self.carregar_encartes)
