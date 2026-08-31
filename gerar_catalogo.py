@@ -17,6 +17,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 import customtkinter as ctk
 from tkcalendar import DateEntry
+from PIL import Image, ImageDraw, ImageFont
 
 CONFIG_FILE = "config_banco.json"
 
@@ -54,12 +55,77 @@ def get_connection():
     )
 
 # ==============================================================================
+# FUNÇÃO DE GERAÇÃO DA IMAGEM DO ENCARTE (3 COLUNAS)
+# ==============================================================================
+def gerar_imagem_encarte_3_colunas(titulo, dt_ini, dt_fim, itens, caminho_saida="encarte_3colunas.jpg"):
+    # Configuração de dimensões da imagem (Padrão Folha A4 / Full HD em pixels)
+    LARGURA_TOTAL = 1200
+    COLUNAS = 3
+    MARGEM_LATERAL = 40
+    MARGEM_TOPO = 180
+    ESPACO_HORIZ = 20
+    ESPACO_VERT = 20
+
+    # Cálculo da largura de cada card para caber exatamente 3 por linha
+    largura_util = LARGURA_TOTAL - (MARGEM_LATERAL * 2) - (ESPACO_HORIZ * (COLUNAS - 1))
+    largura_card = largura_util // COLUNAS
+    altura_card = 350
+
+    num_itens = len(itens)
+    linhas = (num_itens + COLUNAS - 1) // COLUNAS
+    altura_total = MARGEM_TOPO + linhas * (altura_card + ESPACO_VERT) + 60
+
+    # Criação do canvas
+    img = Image.new("RGB", (LARGURA_TOTAL, max(altura_total, 800)), color="#FFFFFF")
+    draw = ImageDraw.Draw(img)
+
+    try:
+        font_titulo = ImageFont.truetype("arial.ttf", 36)
+        font_sub = ImageFont.truetype("arial.ttf", 22)
+        font_card_cod = ImageFont.truetype("arial.ttf", 18)
+        font_card_preco = ImageFont.truetype("arial.ttf", 26)
+    except IOError:
+        font_titulo = font_sub = font_card_cod = font_card_preco = ImageFont.load_default()
+
+    # Cabeçalho do Encarte
+    draw.rectangle([0, 0, LARGURA_TOTAL, 140], fill="#1B5E20")
+    draw.text((MARGEM_LATERAL, 30), titulo.upper(), fill="#FFFFFF", font=font_titulo)
+    draw.text((MARGEM_LATERAL, 85), f"OFERTAS VÁLIDAS DE {dt_ini} ATÉ {dt_fim}", fill="#A5D6A7", font=font_sub)
+
+    # Renderização da grade em 3 colunas
+    for idx, item in enumerate(itens):
+        col = idx % COLUNAS
+        lin = idx // COLUNAS
+
+        x = MARGEM_LATERAL + col * (largura_card + ESPACO_HORIZ)
+        y = MARGEM_TOPO + lin * (altura_card + ESPACO_VERT)
+
+        # Fundo do Card do Produto
+        draw.rectangle([x, y, x + largura_card, y + altura_card], outline="#CCCCCC", fill="#F9F9F9", width=2)
+
+        # Código do produto
+        cod_text = f"CÓD: {item['codigo_prod']}"
+        draw.text((x + 15, y + 15), cod_text, fill="#333333", font=font_card_cod)
+
+        # Área reservada para imagem do produto
+        draw.rectangle([x + 20, y + 50, x + largura_card - 20, y + 230], outline="#E0E0E0", fill="#FFFFFF")
+        draw.text((x + (largura_card // 4), y + 130), "[ IMAGEM ]", fill="#CCCCCC", font=font_card_cod)
+
+        # Bloco de Preço
+        draw.rectangle([x + 10, y + 250, x + largura_card - 10, y + 330], fill="#D32F2F")
+        preco_fmt = f"R$ {item['preco_oferta']:.2f}".replace('.', ',')
+        draw.text((x + 20, y + 270), preco_fmt, fill="#FFFFFF", font=font_card_preco)
+
+    img.save(caminho_saida)
+    return caminho_saida
+
+# ==============================================================================
 # JANELA DE PARÂMETROS DA CONEXÃO
 # ==============================================================================
 class ParametrosWindow(ctk.CTkToplevel):
     def __init__(self, parent):
         super().__init__(parent)
-        self.title("⚙️ Parâmetros de Conexão")
+        self.title("⚙ Parâmetros de Conexão")
         self.geometry("400x380")
         self.grab_set()
 
@@ -250,6 +316,9 @@ class FormEncarteWindow(ctk.CTkToplevel):
         frame_botoes = ctk.CTkFrame(self, fg_color="transparent")
         frame_botoes.pack(fill="x", padx=20, pady=10)
 
+        btn_gerar_img = ctk.CTkButton(frame_botoes, text="🎨 Gerar Imagem (3 Colunas)", fg_color="#0288D1", height=40, command=self.exportar_imagem)
+        btn_gerar_img.pack(side="left", padx=5)
+
         btn_salvar = ctk.CTkButton(frame_botoes, text="💾 Salvar no Banco", font=ctk.CTkFont(weight="bold"), fg_color="#1B5E20", height=40, command=self.salvar_banco)
         btn_salvar.pack(side="right", padx=5)
 
@@ -371,6 +440,21 @@ class FormEncarteWindow(ctk.CTkToplevel):
         except Exception as e:
             messagebox.showerror("Erro ao Carregar", str(e))
 
+    def exportar_imagem(self):
+        titulo = self.txt_titulo.get().strip()
+        dt_ini = self.txt_dt_ini.get().strip()
+        dt_fim = self.txt_dt_fim.get().strip()
+
+        if not titulo or not self.itens:
+            messagebox.showwarning("Atenção", "Preencha o título e insira produtos para gerar a imagem.")
+            return
+
+        try:
+            arquivo = gerar_imagem_encarte_3_colunas(titulo, dt_ini, dt_fim, self.itens)
+            messagebox.showinfo("Imagem Gerada", f"Encarte em 3 colunas gerado com sucesso!\nSalvo em: {arquivo}")
+        except Exception as e:
+            messagebox.showerror("Erro ao Gerar Imagem", str(e))
+
     def salvar_banco(self):
         titulo = self.txt_titulo.get().strip()
         dt_ini_raw = self.txt_dt_ini.get().strip()
@@ -439,10 +523,10 @@ class AppPrincipal(ctk.CTk):
 
         ctk.CTkLabel(frame_topo, text="Encartes Cadastrados", font=ctk.CTkFont(size=16, weight="bold")).pack(side="left", padx=10)
         
-        btn_params = ctk.CTkButton(frame_topo, text="⚙️ Parâmetros", fg_color="#455A64", width=110, command=self.abrir_parametros)
+        btn_params = ctk.CTkButton(frame_topo, text="⚙ Parâmetros", fg_color="#455A64", width=110, command=self.abrir_parametros)
         btn_params.pack(side="right", padx=5, pady=5)
 
-        btn_novo = ctk.CTkButton(frame_topo, text="➕ Novo Encarte", fg_color="#2E7D32", width=120, command=self.novo_encarte)
+        btn_novo = ctk.CTkButton(frame_topo, text="+ Novo Encarte", fg_color="#2E7D32", width=120, command=self.novo_encarte)
         btn_novo.pack(side="right", padx=5, pady=5)
 
         # Barra de Pesquisa de Encarte por Título
@@ -513,7 +597,7 @@ class AppPrincipal(ctk.CTk):
                 lbl_info = f"#{enc['id']} - {enc['titulo']} ({dt_ini_str} a {dt_fim_str})"
                 ctk.CTkLabel(row, text=lbl_info, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=cor_status).pack(side="left", padx=10, fill="x", expand=True)
 
-                btn_editar = ctk.CTkButton(row, text="✏️ Editar", width=70, command=lambda e_id=enc['id']: self.editar_encarte(e_id))
+                btn_editar = ctk.CTkButton(row, text="✏ Editar", width=70, command=lambda e_id=enc['id']: self.editar_encarte(e_id))
                 btn_editar.pack(side="right", padx=5, pady=5)
 
         except Exception as e:
