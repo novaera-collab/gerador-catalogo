@@ -23,15 +23,15 @@ jobs:
 
     - name: Build GERAR_CATALOGO
       run: |
-        pyinstaller --noconsole --onefile --name GERAR_CATALOGO gerar_catalogo.py
+        pyinstaller --noconsole --onefile --clean --exclude-module customtkinter --exclude-module psycopg2 --exclude-module psycopg2-binary --exclude-module tkcalendar --exclude-module babel --name GERAR_CATALOGO gerar_catalogo.py
 
     - name: Build VISUALIZAR_CATALOGO
       run: |
-        pyinstaller --noconsole --onefile --name VISUALIZAR_CATALOGO visualizar_catalogo.py
+        pyinstaller --noconsole --onefile --clean --exclude-module customtkinter --exclude-module psycopg2 --exclude-module psycopg2-binary --exclude-module tkcalendar --exclude-module babel --name VISUALIZAR_CATALOGO visualizar_catalogo.py
 
     - name: Build APP_GESTAO_ENCARTE
       run: |
-        pyinstaller --noconsole --onefile --collect-all customtkinter --collect-all tkcalendar --collect-all babel --name APP_GESTAO_ENCARTE app_gestao_encarte.py
+        pyinstaller --noconsole --onefile --clean --collect-all customtkinter --collect-all tkcalendar --collect-all babel --name APP_GESTAO_ENCARTE app_gestao_encarte.py
 
     - name: Upload Executables
       uses: actions/upload-artifact@v4
