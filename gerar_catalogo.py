@@ -28,9 +28,12 @@ def carregar_e_ajustar_imagem(caminho, largura_max, altura_max):
     except Exception:
         return None
 
-def gerar_catalogo_completo(config, produtos, caminho_saida):
+def renderizar_paginas_jpg(config, produtos, caminho_saida_base):
+    # Limite fixo de 9 produtos por página para manter alta definição no WhatsApp
+    PRODUTOS_POR_PAGINA = 9
     COLUNAS = 3
-    LARGURA_TOTAL = 1600          # Resolução expandida para WhatsApp
+    LARGURA_TOTAL = 1600
+    ALTURA_TOTAL = 2000
     MARGEM_LATERAL = 50
     MARGEM_TOPO = 220
     ESPACO_HORIZ = 25
@@ -38,23 +41,16 @@ def gerar_catalogo_completo(config, produtos, caminho_saida):
     ALTURA_CABECALHO = 170
     ALTURA_RODAPE = 160
 
-    # Cores personalizadas
+    # Configuração de Cores
     cor_topo_rodape  = hex_to_rgb(config.get('cor_tit_rodape'), (27, 94, 32))
     cor_tarja_bg     = hex_to_rgb(config.get('cor_grid_tarja'), (78, 238, 148))
     cor_preco_texto  = hex_to_rgb(config.get('cor_grid_preco'), (0, 0, 0))
 
     largura_util = LARGURA_TOTAL - (MARGEM_LATERAL * 2) - (ESPACO_HORIZ * (COLUNAS - 1))
     largura_card = largura_util // COLUNAS
-    altura_card = 520             # Card ampliado para fotos gigantes
+    altura_card = 460
 
-    num_produtos = len(produtos)
-    linhas = (num_produtos + COLUNAS - 1) // COLUNAS if num_produtos > 0 else 1
-    altura_total = MARGEM_TOPO + (linhas * (altura_card + ESPACO_VERT)) + ALTURA_RODAPE + 40
-
-    img = Image.new("RGB", (LARGURA_TOTAL, max(altura_total, 1000)), color="#FFFFFF")
-    draw = ImageDraw.Draw(img)
-
-    # Fontes Proporcionais à Alta Resolução
+    # Carregamento de Fontes
     try:
         font_titulo_bold  = ImageFont.truetype("arialbd.ttf", 40)
         font_sub_regular   = ImageFont.truetype("arial.ttf", 22)
@@ -67,137 +63,151 @@ def gerar_catalogo_completo(config, produtos, caminho_saida):
     except IOError:
         font_titulo_bold = font_sub_regular = font_cod_bold = font_desc_bold = font_marca = font_preco_bold = font_rod_destaque = font_rod_validade = ImageFont.load_default()
 
-    # 1. CABEÇALHO
-    draw.rectangle([0, 0, LARGURA_TOTAL, ALTURA_CABECALHO], fill=cor_topo_rodape)
-    
-    logo_img = carregar_e_ajustar_imagem(config.get('cabecalho_logo'), 340, 130)
-    if logo_img:
-        img.paste(logo_img, (MARGEM_LATERAL, 20))
+    total_produtos = len(produtos)
+    total_paginas = (total_produtos + PRODUTOS_POR_PAGINA - 1) // PRODUTOS_POR_PAGINA if total_produtos > 0 else 1
 
-    texto_titulo = str(config.get('titulo', 'ENCARTE')).upper()
-    texto_site   = str(config.get('cabecalho_site', ''))
+    if not caminho_saida_base:
+        caminho_saida_base = config.get('saida_jpg', 'CATALOGO.JPG')
 
-    bbox_tit = draw.textbbox((0, 0), texto_titulo, font=font_titulo_bold)
-    largura_tit = bbox_tit[2] - bbox_tit[0]
-
-    bbox_site = draw.textbbox((0, 0), texto_site, font=font_sub_regular)
-    largura_site = bbox_site[2] - bbox_site[0]
-
-    x_titulo = LARGURA_TOTAL - MARGEM_LATERAL - largura_tit
-    x_site   = LARGURA_TOTAL - MARGEM_LATERAL - largura_site
-
-    draw.text((x_titulo, 40), texto_titulo, fill="#FFFFFF", font=font_titulo_bold)
-    if texto_site:
-        draw.text((x_site, 100), texto_site, fill="#E0E0E0", font=font_sub_regular)
-
-    # 2. CARDS DE PRODUTOS
-    for idx, prod in enumerate(produtos):
-        coluna = idx % COLUNAS
-        linha = idx // COLUNAS
-
-        x = MARGEM_LATERAL + coluna * (largura_card + ESPACO_HORIZ)
-        y = MARGEM_TOPO + linha * (altura_card + ESPACO_VERT)
-
-        # Borda do card mais visível
-        draw.rectangle([x, y, x + largura_card, y + altura_card], outline="#BBBBBB", fill="#FAFAFA", width=3)
-
-        # Código & Marca
-        cod_str = str(prod.get('codigo', '')).zfill(5)
-        marca_str = str(prod.get('marca', '')).upper()
-        draw.text((x + 20, y + 16), f"CÓD: {cod_str}", fill="#000000", font=font_cod_bold)
-        if marca_str:
-            draw.text((x + largura_card - 140, y + 16), marca_str[:12], fill="#555555", font=font_marca)
-
-        # Foto Muito Maior (320px de altura)
-        area_foto_x, area_foto_y = x + 20, y + 50
-        area_foto_w, area_foto_h = largura_card - 40, 320
-        draw.rectangle([area_foto_x, area_foto_y, area_foto_x + area_foto_w, area_foto_y + area_foto_h], outline="#E0E0E0", fill="#FFFFFF")
-
-        foto_prod = carregar_e_ajustar_imagem(prod.get('foto'), area_foto_w - 10, area_foto_h - 10)
-        if foto_prod:
-            px = area_foto_x + (area_foto_w - foto_prod.width) // 2
-            py = area_foto_y + (area_foto_h - foto_prod.height) // 2
-            img.paste(foto_prod, (px, py))
-        else:
-            draw.text((area_foto_x + (area_foto_w // 4), area_foto_y + 140), "[ SEM FOTO ]", fill="#CCCCCC", font=font_cod_bold)
-
-        # Descrição com Letras Maiúsculas em Negrito
-        desc = str(prod.get('descricao', 'PRODUTO SEM DESCRIÇÃO'))[:28]
-        draw.text((x + 20, y + 385), desc.upper(), fill="#000000", font=font_desc_bold)
-
-        # Tarja de Preço Ampliada
-        tarja_x1, tarja_y1 = x + 12, y + 430
-        tarja_x2, tarja_y2 = x + largura_card - 12, y + 508
-        draw.rectangle([tarja_x1, tarja_y1, tarja_x2, tarja_y2], fill=cor_tarja_bg)
-
-        try:
-            preco_val = float(str(prod.get('preco', 0)).replace(',', '.'))
-        except ValueError:
-            preco_val = 0.0
-        preco_fmt = f"R$ {preco_val:.2f}".replace('.', ',')
-
-        # Centralização do Preço
-        bbox_p = draw.textbbox((0, 0), preco_fmt, font=font_preco_bold)
-        largura_p = bbox_p[2] - bbox_p[0]
-        altura_p = bbox_p[3] - bbox_p[1]
-
-        x_preco = tarja_x1 + ((tarja_x2 - tarja_x1) - largura_p) // 2
-        y_preco = tarja_y1 + ((tarja_y2 - tarja_y1) - altura_p) // 2 - 4
-
-        draw.text((x_preco, y_preco), preco_fmt, fill=cor_preco_texto, font=font_preco_bold)
-
-    # 3. RODAPÉ DESTACADO EM 2 LINHAS
-    y_rodape = altura_total - ALTURA_RODAPE
-    draw.rectangle([0, y_rodape, LARGURA_TOTAL, altura_total], fill=cor_topo_rodape)
-
-    # LINHA 1: Contato | Logo Whats + Telefone
-    contato_str = str(config.get('rodape_contato', '')).strip()
-    fone_str = str(config.get('rodape_fone', '')).strip()
-    ico_whats = carregar_e_ajustar_imagem(config.get('rodape_logo_fone'), 42, 42)
-
-    texto_contato = f"{contato_str}   |" if contato_str else ""
-    texto_fone = f"{fone_str}" if fone_str else ""
-
-    bbox_c = draw.textbbox((0, 0), texto_contato, font=font_rod_destaque) if texto_contato else (0,0,0,0)
-    bbox_f = draw.textbbox((0, 0), texto_fone, font=font_rod_destaque) if texto_fone else (0,0,0,0)
-
-    larg_contato = bbox_c[2] - bbox_c[0]
-    larg_fone    = bbox_f[2] - bbox_f[0]
-    larg_ico     = (ico_whats.width + 15) if ico_whats else 0
-
-    largura_total_l1 = larg_contato + larg_ico + larg_fone
-    x_cursor = (LARGURA_TOTAL - largura_total_l1) // 2
-    y_l1 = y_rodape + 30
-
-    if texto_contato:
-        draw.text((x_cursor, y_l1), texto_contato, fill="#FFFFFF", font=font_rod_destaque)
-        x_cursor += larg_contato + 15
-
-    if ico_whats:
-        img.paste(ico_whats, (x_cursor, y_l1 - 4))
-        x_cursor += larg_ico
-
-    if texto_fone:
-        draw.text((x_cursor, y_l1), texto_fone, fill="#FFFFFF", font=font_rod_destaque)
-
-    # LINHA 2: Validade
-    validade_str = str(config.get('rodape_validade', '')).strip()
-    if validade_str:
-        bbox_val = draw.textbbox((0, 0), validade_str, font=font_rod_validade)
-        larg_val = bbox_val[2] - bbox_val[0]
-        x_val = (LARGURA_TOTAL - larg_val) // 2
-        y_l2 = y_rodape + 95
-        draw.text((x_val, y_l2), validade_str, fill="#E0E0E0", font=font_rod_validade)
-
-    # 4. SALVAR ARQUIVO JPG
-    if not caminho_saida:
-        caminho_saida = config.get('saida_jpg', 'CATALOGO.JPG')
-    
-    pasta_dest = os.path.dirname(caminho_saida)
+    pasta_dest = os.path.dirname(caminho_saida_base)
     if pasta_dest and not os.path.exists(pasta_dest):
         os.makedirs(pasta_dest, exist_ok=True)
 
-    img.save(caminho_saida, quality=98)
+    nome_base, ext = os.path.splitext(caminho_saida_base)
+    if not ext:
+        ext = ".JPG"
+
+    # Geração de cada página JPG
+    for num_pag in range(total_paginas):
+        prods_pagina = produtos[num_pag * PRODUTOS_POR_PAGINA : (num_pag + 1) * PRODUTOS_POR_PAGINA]
+
+        img = Image.new("RGB", (LARGURA_TOTAL, ALTURA_TOTAL), color="#FFFFFF")
+        draw = ImageDraw.Draw(img)
+
+        # 1. CABEÇALHO
+        draw.rectangle([0, 0, LARGURA_TOTAL, ALTURA_CABECALHO], fill=cor_topo_rodape)
+        
+        logo_img = carregar_e_ajustar_imagem(config.get('cabecalho_logo'), 340, 130)
+        if logo_img:
+            img.paste(logo_img, (MARGEM_LATERAL, 20))
+
+        texto_titulo = str(config.get('titulo', 'ENCARTE')).upper()
+        texto_site   = str(config.get('cabecalho_site', ''))
+
+        bbox_tit = draw.textbbox((0, 0), texto_titulo, font=font_titulo_bold)
+        largura_tit = bbox_tit[2] - bbox_tit[0]
+
+        bbox_site = draw.textbbox((0, 0), texto_site, font=font_sub_regular)
+        largura_site = bbox_site[2] - bbox_site[0]
+
+        x_titulo = LARGURA_TOTAL - MARGEM_LATERAL - largura_tit
+        x_site   = LARGURA_TOTAL - MARGEM_LATERAL - largura_site
+
+        draw.text((x_titulo, 40), texto_titulo, fill="#FFFFFF", font=font_titulo_bold)
+        if texto_site:
+            draw.text((x_site, 100), texto_site, fill="#E0E0E0", font=font_sub_regular)
+
+        # 2. CARDS DE PRODUTOS
+        for idx, prod in enumerate(prods_pagina):
+            coluna = idx % COLUNAS
+            linha = idx // COLUNAS
+
+            x = MARGEM_LATERAL + coluna * (largura_card + ESPACO_HORIZ)
+            y = MARGEM_TOPO + linha * (altura_card + ESPACO_VERT)
+
+            draw.rectangle([x, y, x + largura_card, y + altura_card], outline="#BBBBBB", fill="#FAFAFA", width=3)
+
+            cod_str = str(prod.get('codigo', '')).zfill(5)
+            marca_str = str(prod.get('marca', '')).upper()
+            draw.text((x + 20, y + 16), f"CÓD: {cod_str}", fill="#000000", font=font_cod_bold)
+            if marca_str:
+                draw.text((x + largura_card - 140, y + 16), marca_str[:12], fill="#555555", font=font_marca)
+
+            area_foto_x, area_foto_y = x + 20, y + 48
+            area_foto_w, area_foto_h = largura_card - 40, 270
+            draw.rectangle([area_foto_x, area_foto_y, area_foto_x + area_foto_w, area_foto_y + area_foto_h], outline="#E0E0E0", fill="#FFFFFF")
+
+            foto_prod = carregar_e_ajustar_imagem(prod.get('foto'), area_foto_w - 10, area_foto_h - 10)
+            if foto_prod:
+                px = area_foto_x + (area_foto_w - foto_prod.width) // 2
+                py = area_foto_y + (area_foto_h - foto_prod.height) // 2
+                img.paste(foto_prod, (px, py))
+            else:
+                draw.text((area_foto_x + (area_foto_w // 4), area_foto_y + 110), "[ SEM FOTO ]", fill="#CCCCCC", font=font_cod_bold)
+
+            desc = str(prod.get('descricao', 'PRODUTO SEM DESCRIÇÃO'))[:28]
+            draw.text((x + 20, y + 335), desc.upper(), fill="#000000", font=font_desc_bold)
+
+            tarja_x1, tarja_y1 = x + 12, y + 380
+            tarja_x2, tarja_y2 = x + largura_card - 12, y + 448
+            draw.rectangle([tarja_x1, tarja_y1, tarja_x2, tarja_y2], fill=cor_tarja_bg)
+
+            try:
+                preco_val = float(str(prod.get('preco', 0)).replace(',', '.'))
+            except ValueError:
+                preco_val = 0.0
+            preco_fmt = f"R$ {preco_val:.2f}".replace('.', ',')
+
+            bbox_p = draw.textbbox((0, 0), preco_fmt, font=font_preco_bold)
+            largura_p = bbox_p[2] - bbox_p[0]
+            altura_p = bbox_p[3] - bbox_p[1]
+
+            x_preco = tarja_x1 + ((tarja_x2 - tarja_x1) - largura_p) // 2
+            y_preco = tarja_y1 + ((tarja_y2 - tarja_y1) - altura_p) // 2 - 4
+
+            draw.text((x_preco, y_preco), preco_fmt, fill=cor_preco_texto, font=font_preco_bold)
+
+        # 3. RODAPÉ
+        y_rodape = ALTURA_TOTAL - ALTURA_RODAPE
+        draw.rectangle([0, y_rodape, LARGURA_TOTAL, ALTURA_TOTAL], fill=cor_topo_rodape)
+
+        contato_str = str(config.get('rodape_contato', '')).strip()
+        fone_str = str(config.get('rodape_fone', '')).strip()
+        ico_whats = carregar_e_ajustar_imagem(config.get('rodape_logo_fone'), 42, 42)
+
+        texto_contato = f"{contato_str}   |" if contato_str else ""
+        texto_fone = f"{fone_str}" if fone_str else ""
+
+        bbox_c = draw.textbbox((0, 0), texto_contato, font=font_rod_destaque) if texto_contato else (0,0,0,0)
+        bbox_f = draw.textbbox((0, 0), texto_fone, font=font_rod_destaque) if texto_fone else (0,0,0,0)
+
+        larg_contato = bbox_c[2] - bbox_c[0]
+        larg_fone    = bbox_f[2] - bbox_f[0]
+        larg_ico     = (ico_whats.width + 15) if ico_whats else 0
+
+        largura_total_l1 = larg_contato + larg_ico + larg_fone
+        x_cursor = (LARGURA_TOTAL - largura_total_l1) // 2
+        y_l1 = y_rodape + 30
+
+        if texto_contato:
+            draw.text((x_cursor, y_l1), texto_contato, fill="#FFFFFF", font=font_rod_destaque)
+            x_cursor += larg_contato + 15
+
+        if ico_whats:
+            img.paste(ico_whats, (x_cursor, y_l1 - 4))
+            x_cursor += larg_ico
+
+        if texto_fone:
+            draw.text((x_cursor, y_l1), texto_fone, fill="#FFFFFF", font=font_rod_destaque)
+
+        validade_str = str(config.get('rodape_validade', '')).strip()
+        if total_paginas > 1:
+            validade_str += f"   (Página {num_pag + 1} de {total_paginas})"
+
+        if validade_str:
+            bbox_val = draw.textbbox((0, 0), validade_str, font=font_rod_validade)
+            larg_val = bbox_val[2] - bbox_val[0]
+            x_val = (LARGURA_TOTAL - larg_val) // 2
+            y_l2 = y_rodape + 95
+            draw.text((x_val, y_l2), validade_str, fill="#E0E0E0", font=font_rod_validade)
+
+        # Definindo o nome de saída da página .JPG
+        if total_paginas > 1:
+            caminho_final_jpg = f"{nome_base}_{num_pag + 1}{ext}"
+        else:
+            caminho_final_jpg = f"{nome_base}{ext}"
+
+        img.save(caminho_final_jpg, format="JPEG", quality=98)
 
 if __name__ == "__main__":
     try:
@@ -236,7 +246,7 @@ if __name__ == "__main__":
                         for row in reader:
                             produtos.append(row)
 
-            gerar_catalogo_completo(config, produtos, saida_cli)
+            renderizar_paginas_jpg(config, produtos, saida_cli)
 
     except Exception as e:
         with open("erro_log.txt", "w", encoding="utf-8") as f_err:
