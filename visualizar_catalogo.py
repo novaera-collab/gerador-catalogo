@@ -175,19 +175,25 @@ class AppVisualizador:
         self.atualizar_visualizacao()
 
     def localizar_paginas_geradas(self, caminho_base):
-        """Encontra todas as páginas salvas (ex: CATALOGO_1.jpg, CATALOGO_2.jpg ou CATALOGO.jpg)"""
+        """Encontra todas as páginas salvas (independente de .jpg ou .JPG)"""
         if not caminho_base:
             return []
 
-        nome_base, ext = os.path.splitext(caminho_base)
-        if not ext:
-            ext = ".JPG"
+        nome_base = os.path.splitext(caminho_base)[0]
+        pasta = os.path.dirname(caminho_base) or os.getcwd()
 
-        # Tenta buscar pelo padrão numerado (ex: ..._1.JPG, ..._2.JPG)
-        padrao_busca = f"{nome_base}_*{ext}"
-        arquivos_encontrados = glob.glob(padrao_busca)
+        # Busca todos os arquivos que começam com o nome base na pasta
+        arquivos_encontrados = []
+        if os.path.exists(pasta):
+            for f in os.listdir(pasta):
+                caminho_completo = os.path.join(pasta, f)
+                if f.lower().endswith(('.jpg', '.jpeg')):
+                    base_arquivo = os.path.splitext(caminho_completo)[0]
+                    # Verifica se o arquivo é a base ou tem o sufixo _1, _2, etc.
+                    if base_arquivo == nome_base or base_arquivo.startswith(nome_base + "_"):
+                        arquivos_encontrados.append(caminho_completo)
 
-        # Ordena numericamente pelo sufixo da página
+        # Ordena numericamente pelo sufixo da página (ex: _1, _2, _3, _4)
         def extrair_numero(caminho):
             try:
                 base = os.path.splitext(caminho)[0]
@@ -196,11 +202,6 @@ class AppVisualizador:
                 return 0
 
         arquivos_encontrados.sort(key=extrair_numero)
-
-        # Se não encontrou arquivos numerados, verifica se existe o arquivo base direto
-        if not arquivos_encontrados and os.path.exists(caminho_base):
-            arquivos_encontrados.append(caminho_base)
-
         return arquivos_encontrados
 
     def atualizar_visualizacao(self):
@@ -303,7 +304,7 @@ if __name__ == "__main__":
         pasta_param = param1
         arquivo_jpg = param2
     elif param1:
-        if param1.lower().endswith(".jpg"):
+        if param1.lower().endswith(('.jpg', '.jpeg')):
             arquivo_jpg = param1
             pasta_param = os.path.dirname(param1)
         else:
