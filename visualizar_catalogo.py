@@ -2,7 +2,7 @@ import sys
 import os
 import io
 import csv
-import glob
+import re
 import webbrowser
 import urllib.parse
 import tkinter as tk
@@ -175,34 +175,44 @@ class AppVisualizador:
         self.atualizar_visualizacao()
 
     def localizar_paginas_geradas(self, caminho_base):
-        """Encontra todas as páginas salvas (independente de .jpg ou .JPG)"""
+        """Captura TODAS as páginas salvas (base e numeradas) sem limitar quantidade."""
         if not caminho_base:
             return []
 
-        nome_base = os.path.splitext(caminho_base)[0]
+        # Remove extensão e sufixos numéricos para descobrir o NOME LIMPO BASE
+        nome_sem_ext = os.path.splitext(caminho_base)[0]
+        nome_limpo = re.sub(r'_\d+$', '', nome_sem_ext)
         pasta = os.path.dirname(caminho_base) or os.getcwd()
 
-        # Busca todos os arquivos que começam com o nome base na pasta
         arquivos_encontrados = []
         if os.path.exists(pasta):
             for f in os.listdir(pasta):
-                caminho_completo = os.path.join(pasta, f)
                 if f.lower().endswith(('.jpg', '.jpeg')):
-                    base_arquivo = os.path.splitext(caminho_completo)[0]
-                    # Verifica se o arquivo é a base ou tem o sufixo _1, _2, etc.
-                    if base_arquivo == nome_base or base_arquivo.startswith(nome_base + "_"):
+                    caminho_completo = os.path.join(pasta, f)
+                    sem_ext = os.path.splitext(caminho_completo)[0]
+                    
+                    # Captura se for exatamente o nome limpo ou se começar com 'NOME_LIMPO_'
+                    if sem_ext == nome_limpo or sem_ext.startswith(nome_limpo + "_"):
                         arquivos_encontrados.append(caminho_completo)
 
-        # Ordena numericamente pelo sufixo da página (ex: _1, _2, _3, _4)
-        def extrair_numero(caminho):
-            try:
-                base = os.path.splitext(caminho)[0]
-                return int(base.rsplit('_', 1)[-1])
-            except ValueError:
-                return 0
+        # Função para ordenar: Arquivo base sem número fica por último ou em 1º, 
+        # e arquivos com _1, _2, _3 entram na ordem numérica exata.
+        def extrair_ordem(caminho):
+            base = os.path.splitext(caminho)[0]
+            match = re.search(r'_(\d+)$', base)
+            if match:
+                return int(match.group(1))
+            return 0  # Caso seja o arquivo base sem sufixo_N
 
-        arquivos_encontrados.sort(key=extrair_numero)
-        return arquivos_encontrados
+        arquivos_encontrados.sort(key=extrair_ordem)
+        
+        # Remove duplicados mantendo a ordem
+        resultado_final = []
+        for item in arquivos_encontrados:
+            if item not in resultado_final:
+                resultado_final.append(item)
+
+        return resultado_final
 
     def atualizar_visualizacao(self):
         """Redesenha a tela conforme a página selecionada"""
