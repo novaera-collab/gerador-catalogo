@@ -2,6 +2,7 @@ import sys
 import os
 import io
 import csv
+import glob
 import webbrowser
 import urllib.parse
 import tkinter as tk
@@ -36,7 +37,6 @@ def copiar_imagem_para_clipboard(caminho_img):
         except Exception:
             return False
     else:
-        # Fallback usando PowerShell se pywin32 não estiver instalado
         try:
             cmd = f'powershell -command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Clipboard]::SetImage([System.Drawing.Image]::FromFile(\'{caminho_img}\'))"'
             os.system(cmd)
@@ -45,21 +45,19 @@ def copiar_imagem_para_clipboard(caminho_img):
             return False
 
 def ler_metadados_csv(csv_path):
-    """
-    Lê o cabeçalho/metadados do CSV gerado.
-    Identifica o campo 'contato_whatsapp' da consulta SQL.
-    """
+    """Lê o cabeçalho/metadados do CSV gerado."""
     meta = {'fone': '', 'nome_contato': '', 'titulo': 'Encarte de Ofertas', 'saida_jpg': ''}
     if not os.path.exists(csv_path):
         return meta
 
     try:
-        # Tenta ler em UTF-8 (padrão) ou Latin-1 como fallback
         for enc in ['utf-8-sig', 'utf-8', 'latin-1']:
             try:
                 with open(csv_path, mode='r', encoding=enc) as f:
-                    reader = csv.DictReader(f, delimiter=',')
-                    # Limpa espaços e lowercase nos nomes das colunas
+                    reader = csv.DictReader(f, delimiter=';')
+                    if not reader.fieldnames:
+                        reader = csv.DictReader(f, delimiter=',')
+                    
                     if reader.fieldnames:
                         field_map = {col.strip().lower().replace('\ufeff', ''): col for col in reader.fieldnames}
                         
@@ -67,7 +65,6 @@ def ler_metadados_csv(csv_path):
                         if first_row and 'contato_whatsapp' in field_map:
                             raw_whatsapp = first_row.get(field_map['contato_whatsapp'], '').strip()
                             
-                            # Trata formato "Nome - (XX) 99999-9999" ou apenas "(XX) 99999-9999"
                             if ' - ' in raw_whatsapp:
                                 partes = raw_whatsapp.split(' - ', 1)
                                 meta['nome_contato'] = partes[0].strip()
@@ -96,6 +93,10 @@ class AppVisualizador:
         self.root = root
         self.jpg_path = jpg_path
         
+        # Mapeamento automático de páginas geradas
+        self.lista_paginas = self.localizar_paginas_geradas(self.jpg_path)
+        self.indice_atual = 0
+
         # Define caminho do CSV associado para ler os metadados de contato
         base_path = os.path.splitext(self.jpg_path)[0] if self.jpg_path else ""
         self.csv_path = f"{base_path}.csv" if base_path else ""
@@ -104,25 +105,29 @@ class AppVisualizador:
         self.num_whats = limpar_numero_whatsapp(self.meta.get('fone', ''))
 
         self.root.title("Visualizador de Encarte - Oeste Pharma")
-        self.root.geometry("1000x750")
+        self.root.geometry("1050x800")
         self.root.configure(bg="#f0f0f0")
         
-        # Traz a janela para frente
+        # Traz a janela para a frente
         self.root.lift()
         self.root.attributes('-topmost', True)
         self.root.after_idle(self.root.attributes, '-topmost', False)
 
-        # PAINEL SUPERIOR
-        frame_topo = tk.Frame(self.root, bg="#22702C")
-        frame_topo.pack(fill="x", side="top", ipady=10)
+        # Atalhos do teclado para mudar de página
+        self.root.bind("<Left>", lambda event: self.pagina_anterior())
+        self.root.bind("<Right>", lambda event: self.proxima_pagina())
 
-        lbl_titulo = tk.Label(frame_topo, text="Encarte Gerado com Sucesso!", font=("Arial", 14, "bold"), fg="white", bg="#22702C")
+        # PAINEL SUPERIOR (MENU E WHATSAPP)
+        frame_topo = tk.Frame(self.root, bg="#22702C")
+        frame_topo.pack(fill="x", side="top", ipady=8)
+
+        lbl_titulo = tk.Label(frame_topo, text="Encarte Gerado com Sucesso!", font=("Arial", 13, "bold"), fg="white", bg="#22702C")
         lbl_titulo.pack(side="left", padx=15)
 
         btn_whats = tk.Button(
             frame_topo, 
-            text="📱 Copiar Imagem e Abrir WhatsApp", 
-            font=("Arial", 11, "bold"), 
+            text="📱 Copiar Página Atual e Abrir WhatsApp", 
+            font=("Arial", 10, "bold"), 
             bg="#25D366", 
             fg="white", 
             activebackground="#1EBE5D",
@@ -133,8 +138,8 @@ class AppVisualizador:
 
         btn_pasta = tk.Button(
             frame_topo, 
-            text="📁 Abrir Pasta", 
-            font=("Arial", 11), 
+            text="📁 Abrir Pasta das Imagens", 
+            font=("Arial", 10), 
             bg="#ffffff", 
             fg="#333333", 
             cursor="hand2",
@@ -142,46 +147,136 @@ class AppVisualizador:
         )
         btn_pasta.pack(side="right", padx=5)
 
-        # PAINEL CENTRAL
+        # BARRA DE NAVEGAÇÃO DE PÁGINAS (ANTERIOR / PRÓXIMO)
+        frame_nav = tk.Frame(self.root, bg="#1B5E20")
+        frame_nav.pack(fill="x", side="top", ipady=4)
+
+        self.btn_ant = tk.Button(
+            frame_nav, text="◀ Anterior", font=("Arial", 10, "bold"), bg="#ffffff", fg="#1B5E20",
+            state="disabled", command=self.pagina_anterior, cursor="hand2"
+        )
+        self.btn_ant.pack(side="left", padx=15)
+
+        self.lbl_paginacao = tk.Label(
+            frame_nav, text="Página 0 de 0", font=("Arial", 11, "bold"), fg="white", bg="#1B5E20"
+        )
+        self.lbl_paginacao.pack(side="left", expand=True)
+
+        self.btn_prox = tk.Button(
+            frame_nav, text="Próximo ▶", font=("Arial", 10, "bold"), bg="#ffffff", fg="#1B5E20",
+            state="disabled", command=self.proxima_pagina, cursor="hand2"
+        )
+        self.btn_prox.pack(side="right", padx=15)
+
+        # PAINEL CENTRAL (VISUALIZAÇÃO DA IMAGEM)
         self.canvas = tk.Canvas(self.root, bg="#333333")
         self.canvas.pack(fill="both", expand=True)
 
-        if os.path.exists(self.jpg_path):
-            self.carregar_imagem()
-        else:
+        self.atualizar_visualizacao()
+
+    def localizar_paginas_geradas(self, caminho_base):
+        """Encontra todas as páginas salvas (ex: CATALOGO_1.jpg, CATALOGO_2.jpg ou CATALOGO.jpg)"""
+        if not caminho_base:
+            return []
+
+        nome_base, ext = os.path.splitext(caminho_base)
+        if not ext:
+            ext = ".JPG"
+
+        # Tenta buscar pelo padrão numerado (ex: ..._1.JPG, ..._2.JPG)
+        padrao_busca = f"{nome_base}_*{ext}"
+        arquivos_encontrados = glob.glob(padrao_busca)
+
+        # Ordena numericamente pelo sufixo da página
+        def extrair_numero(caminho):
+            try:
+                base = os.path.splitext(caminho)[0]
+                return int(base.rsplit('_', 1)[-1])
+            except ValueError:
+                return 0
+
+        arquivos_encontrados.sort(key=extrair_numero)
+
+        # Se não encontrou arquivos numerados, verifica se existe o arquivo base direto
+        if not arquivos_encontrados and os.path.exists(caminho_base):
+            arquivos_encontrados.append(caminho_base)
+
+        return arquivos_encontrados
+
+    def atualizar_visualizacao(self):
+        """Redesenha a tela conforme a página selecionada"""
+        self.canvas.delete("all")
+
+        if not self.lista_paginas:
             self.canvas.create_text(
-                500, 350, 
-                text=f"Arquivo JPG não encontrado em:\n{self.jpg_path}", 
-                fill="white", 
-                font=("Arial", 14), 
-                justify="center"
+                525, 350, 
+                text=f"Nenhum arquivo JPG encontrado em:\n{self.jpg_path}", 
+                fill="white", font=("Arial", 13), justify="center"
+            )
+            self.lbl_paginacao.config(text="Página 0 de 0")
+            self.btn_ant.config(state="disabled")
+            self.btn_prox.config(state="disabled")
+            return
+
+        total = len(self.lista_paginas)
+        self.lbl_paginacao.config(text=f"Página {self.indice_atual + 1} de {total}")
+
+        # Atualiza estado dos botões de navegação
+        self.btn_ant.config(state="normal" if self.indice_atual > 0 else "disabled")
+        self.btn_prox.config(state="normal" if self.indice_atual < total - 1 else "disabled")
+
+        # Carrega a imagem da página atual
+        caminho_atual = self.lista_paginas[self.indice_atual]
+        try:
+            self.pil_img = Image.open(caminho_atual)
+            img_w, img_h = self.pil_img.size
+            
+            # Ajuste de proporção na tela
+            max_w, max_h = 1000, 650
+            ratio = min(max_w / img_w, max_h / img_h)
+            novo_tamanho = (int(img_w * ratio), int(img_h * ratio))
+
+            img_resized = self.pil_img.resize(novo_tamanho, Image.Resampling.LANCZOS)
+            self.tk_img = ImageTk.PhotoImage(img_resized)
+
+            self.canvas.create_image(525, 330, image=self.tk_img, anchor="center")
+        except Exception as e:
+            self.canvas.create_text(
+                525, 350, text=f"Erro ao carregar a imagem:\n{e}", fill="red", font=("Arial", 12)
             )
 
-    def carregar_imagem(self):
-        self.pil_img = Image.open(self.jpg_path)
-        
-        img_w, img_h = self.pil_img.size
-        max_w, max_h = 960, 640
-        ratio = min(max_w / img_w, max_h / img_h)
-        novo_tamanho = (int(img_w * ratio), int(img_h * ratio))
+    def pagina_anterior(self):
+        if self.indice_atual > 0:
+            self.indice_atual -= 1
+            self.atualizar_visualizacao()
 
-        img_resized = self.pil_img.resize(novo_tamanho, Image.Resampling.LANCZOS)
-        self.tk_img = ImageTk.PhotoImage(img_resized)
-
-        self.canvas.create_image(500, 330, image=self.tk_img, anchor="center")
+    def proxima_pagina(self):
+        if self.indice_atual < len(self.lista_paginas) - 1:
+            self.indice_atual += 1
+            self.atualizar_visualizacao()
 
     def abrir_whatsapp(self):
-        # 1. Copia a imagem para a área de transferência do Windows (CTRL+V)
-        copiou = copiar_imagem_para_clipboard(self.jpg_path)
+        if not self.lista_paginas:
+            return
+
+        # Copia a página selecionada no momento para o Clipboard
+        caminho_atual = self.lista_paginas[self.indice_atual]
+        copiou = copiar_imagem_para_clipboard(caminho_atual)
+
+        total_paginas = len(self.lista_paginas)
+        msg_extra = ""
+        if total_paginas > 1:
+            msg_extra = f"\n\n💡 Seu encarte possui {total_paginas} páginas! Esta é a PÁGINA {self.indice_atual + 1}. Você pode folhear as páginas usando as setas do programa para copiar as outras também."
 
         if copiou:
             messagebox.showinfo(
-                "Imagem Copiada!", 
-                "A imagem do encarte foi COPIADA para a memória!\n\n"
-                "Ao abrir o WhatsApp, basta pressionar CTRL + V na conversa para colar a imagem!"
+                "Página Copiada!", 
+                f"A Página {self.indice_atual + 1} foi COPIADA para a memória!\n\n"
+                "Ao abrir o WhatsApp, pressione CTRL + V no campo de mensagem para colar a imagem."
+                f"{msg_extra}"
             )
 
-        # 2. Abre a conversa direta no WhatsApp
+        # Abre conversa no WhatsApp
         nome_contato = self.meta.get('nome_contato', '')
         saudacao = f"Olá {nome_contato}!" if nome_contato else "Olá!"
         mensagem = f"{saudacao} Segue nosso {self.meta.get('titulo', 'Encarte de Ofertas')}."
@@ -194,17 +289,15 @@ class AppVisualizador:
             webbrowser.open("https://web.whatsapp.com")
 
     def abrir_pasta(self):
-        if os.path.exists(self.jpg_path):
-            os.system(f'explorer /select,"{os.path.abspath(self.jpg_path)}"')
-        elif os.path.exists(os.path.dirname(self.jpg_path)):
-            os.system(f'explorer "{os.path.abspath(os.path.dirname(self.jpg_path))}"')
+        caminho_target = self.lista_paginas[self.indice_atual] if self.lista_paginas else self.jpg_path
+        if os.path.exists(caminho_target):
+            os.system(f'explorer /select,"{os.path.abspath(caminho_target)}"')
+        elif os.path.exists(os.path.dirname(caminho_target)):
+            os.system(f'explorer "{os.path.abspath(os.path.dirname(caminho_target))}"')
 
 if __name__ == "__main__":
-    # Tratamento dos argumentos da chamada de sistema:
-    # arg 1: Pasta de parâmetros / saída
-    # arg 2: Caminho completo do arquivo JPG gerado
     pasta_param = sys.argv[1] if len(sys.argv) > 1 else os.getcwd()
-    arquivo_jpg = sys.argv[2] if len(sys.argv) > 2 else os.path.join(pasta_param, "catalogo_encarte.jpg")
+    arquivo_jpg = sys.argv[2] if len(sys.argv) > 2 else os.path.join(pasta_param, "CATALOGO_OESTE_PHARMA.JPG")
 
     root = tk.Tk()
     app = AppVisualizador(root, pasta_parametros=pasta_param, jpg_path=arquivo_jpg)
