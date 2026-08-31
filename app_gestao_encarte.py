@@ -6,12 +6,8 @@ import traceback
 import subprocess
 import psycopg2
 import psycopg2.extras
-from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem,
-    QHeaderView, QMessageBox, QDialog, QComboBox, QCheckBox, QFrame
-)
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+import tkinter as tk
+from tkinter import ttk, messagebox
 
 CONFIG_FILE = "config.json"
 
@@ -31,10 +27,6 @@ def carregar_config():
         "schema": "dk",
         "diretorio_retorno": os.getcwd()
     }
-
-def salvar_config(config):
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(config, f, indent=4)
 
 class DBConnection:
     def __init__(self, config):
@@ -60,85 +52,67 @@ class DBConnection:
         finally:
             conn.close()
 
-class ThreadCarregarEncartes(QThread):
-    sucesso = pyqtSignal(list)
-    erro = pyqtSignal(str)
+class JanelaModalGerar:
+    def __init__(self, parent, encarte_id, encarte_titulo, dt_inicio, dt_fim, config, db):
+        self.win = tk.Toplevel(parent)
+        self.win.title(f"Gerando Encarte #{encarte_id}")
+        self.win.geometry("420x360")
+        self.win.resizable(False, False)
+        self.win.grab_set()
 
-    def __init__(self, db):
-        super().__init__()
-        self.db = db
-
-    def run(self):
-        try:
-            query = """
-                SELECT id, titulo, data_inicio, data_fim, ativo
-                FROM encarte
-                ORDER BY id DESC
-            """
-            dados = self.db.executar_consulta(query)
-            self.sucesso.emit(dados)
-        except Exception as e:
-            self.erro.emit(str(e))
-
-class ModalGerarEncarte(QDialog):
-    def __init__(self, encarte_id, encarte_titulo, dt_inicio, dt_fim, config, db, parent=None):
-        super().__init__(parent)
         self.encarte_id = encarte_id
         self.encarte_titulo = encarte_titulo
         self.validade_texto = f"Precos validos no periodo de {dt_inicio} a {dt_fim}" if dt_inicio else ""
         self.config = config
         self.db = db
 
-        self.setWindowTitle(f"Gerando Encarte #{encarte_id}")
-        self.setFixedSize(420, 320)
+        tk.Label(self.win, text="Nome do Contato (Rodapé):", font=("Arial", 9, "bold")).pack(anchor="w", padx=15, pady=(15, 2))
+        self.txt_nome = tk.Entry(self.win, width=45)
+        self.txt_nome.insert(0, "JOSE")
+        self.txt_nome.pack(padx=15, pady=2)
 
-        layout = QVBoxLayout()
+        tk.Label(self.win, text="Contato WhatsApp:", font=("Arial", 9, "bold")).pack(anchor="w", padx=15, pady=(8, 2))
+        self.txt_whatsapp = tk.Entry(self.win, width=45)
+        self.txt_whatsapp.insert(0, "(45) 99905-1999")
+        self.txt_whatsapp.pack(padx=15, pady=2)
 
-        layout.addWidget(QLabel("<b>Nome do Contato (Rodapé):</b>"))
-        self.txt_nome = QLineEdit()
-        self.txt_nome.setText("JOSE")
-        layout.addWidget(self.txt_nome)
+        tk.Label(self.win, text="Tabela de Preço:", font=("Arial", 9, "bold")).pack(anchor="w", padx=15, pady=(8, 2))
+        self.combo_tabela = ttk.Combobox(self.win, values=["Tabela 1", "Tabela 2", "Tabela 3"], state="readonly", width=42)
+        self.combo_tabela.current(2)
+        self.combo_tabela.pack(padx=15, pady=2)
 
-        layout.addWidget(QLabel("<b>Contato WhatsApp:</b>"))
-        self.txt_whatsapp = QLineEdit()
-        self.txt_whatsapp.setText("(45) 99905-1999")
-        layout.addWidget(self.txt_whatsapp)
+        self.var_saldo = tk.BooleanVar(value=True)
+        self.chk_saldo = tk.Checkbutton(self.win, text="Somente produtos com saldo > 0", variable=self.var_saldo)
+        self.chk_saldo.pack(anchor="w", padx=15, pady=10)
 
-        layout.addWidget(QLabel("<b>Tabela de Preço:</b>"))
-        self.combo_tabela = QComboBox()
-        self.combo_tabela.addItems(["Tabela 1", "Tabela 2", "Tabela 3"])
-        self.combo_tabela.setCurrentIndex(2)  # Padrão: Tabela 3
-        layout.addWidget(self.combo_tabela)
-
-        self.chk_saldo = QCheckBox("Somente produtos com saldo > 0")
-        self.chk_saldo.setChecked(True)
-        layout.addWidget(self.chk_saldo)
-
-        layout.addSpacing(15)
-
-        btn_executar = QPushButton("🚀 Executar Geração")
-        btn_executar.setStyleSheet("background-color: #22702C; color: white; font-weight: bold; padding: 8px;")
-        btn_executar.clicked.connect(self.executar_geracao)
-        layout.addWidget(btn_executar)
-
-        self.setLayout(layout)
+        btn_executar = tk.Button(
+            self.win, 
+            text="🚀 Executar Geração", 
+            bg="#22702C", 
+            fg="white", 
+            font=("Arial", 10, "bold"), 
+            command=self.executar_geracao, 
+            height=2,
+            cursor="hand2"
+        )
+        btn_executar.pack(fill="x", padx=15, pady=10)
 
     def executar_geracao(self):
-        nome_contato = self.txt_nome.text().strip()
-        whatsapp = self.txt_whatsapp.text().strip()
-        tabela_opcao = str(self.combo_tabela.currentIndex() + 1)
-        filtro_saldo = "AND e.fsaldo > 0" if self.chk_saldo.isChecked() else ""
+        nome_contato = self.txt_nome.get().strip()
+        whatsapp = self.txt_whatsapp.get().strip()
+        tabela_opcao = str(self.combo_tabela.current() + 1)
+        filtro_saldo = "AND e.fsaldo > 0" if self.var_saldo.get() else ""
 
         caminho_sql = os.path.join(os.getcwd(), "consulta_catalogo.sql")
         if not os.path.exists(caminho_sql):
-            QMessageBox.critical(self, "Erro", f"Arquivo 'consulta_catalogo.sql' não foi encontrado na pasta raiz.")
+            messagebox.showerror("Erro", "Arquivo 'consulta_catalogo.sql' não foi encontrado na pasta do sistema.")
             return
 
         try:
             with open(caminho_sql, "r", encoding="utf-8") as f:
                 query = f.read()
 
-            # Substituição dos parâmetros dinâmicos na SQL
+            # Substituição das variáveis na instrução SQL
             query = query.replace("{SCHEMA}", self.config.get("schema", "dk"))
             query = query.replace("{ID_ENCARTE}", str(self.encarte_id))
             query = query.replace("{TABELA_PRECO}", tabela_opcao)
@@ -147,17 +121,16 @@ class ModalGerarEncarte(QDialog):
             rows = self.db.executar_consulta(query)
 
             if not rows:
-                QMessageBox.warning(self, "Aviso", "Nenhum produto encontrado para o encarte selecionado.")
+                messagebox.showwarning("Aviso", "Nenhum produto foi encontrado para o encarte selecionado.")
                 return
 
             pasta_saida = self.config.get("diretorio_retorno", os.getcwd())
-            if not os.path.exists(pasta_saida):
-                os.makedirs(pasta_saida, exist_ok=True)
+            os.makedirs(pasta_saida, exist_ok=True)
 
             caminho_csv = os.path.join(pasta_saida, "DADOS_CATALOGO.CSV")
             caminho_jpg = os.path.join(pasta_saida, "CATALOGO_OESTE_PHARMA.JPG")
 
-            # Gravação do CSV com Bloco de Metadados no topo
+            # Escreve os Metadados no topo do CSV + Lista de Produtos
             with open(caminho_csv, "w", encoding="latin-1", newline="", errors="ignore") as f:
                 f.write(f"titulo;{self.encarte_titulo}\n")
                 f.write(f"logo;{os.path.join(os.getcwd(), 'logo', 'oeste.jpg')}\n")
@@ -175,93 +148,110 @@ class ModalGerarEncarte(QDialog):
                     preco = str(r.get('linha_preco', '')).strip()
                     f.write(f"{codigo};{desc};{foto};{preco}\n")
 
-            # Executa Gerar_catalogo.exe para processar o JPG
+            # 1. Executa Gerar_catalogo.exe (gera a imagem JPG)
             exe_gerar = os.path.join(os.getcwd(), "Gerar_catalogo.exe")
             if os.path.exists(exe_gerar):
                 subprocess.run([exe_gerar, caminho_csv], check=True)
 
-            # Executa visualizar_catalogo.exe
+            # 2. Executa visualizar_catalogo.exe (abre a interface de envio)
             exe_visualizar = os.path.join(os.getcwd(), "visualizar_catalogo.exe")
             if os.path.exists(exe_visualizar):
-                subprocess.Popen([exe_visualizar, caminho_csv, caminho_jpg])
+                subprocess.Popen([exe_visualizar, pasta_saida, caminho_jpg])
 
-            self.accept()
+            self.win.destroy()
 
         except Exception as e:
-            QMessageBox.critical(self, "Falha na Geração", f"Ocorreu um erro ao processar o encarte:\n{e}\n\n{traceback.format_exc()}")
+            messagebox.showerror("Falha na Geração", f"Ocorreu um erro ao processar o encarte:\n{e}\n\n{traceback.format_exc()}")
 
-class JanelaPrincipal(QMainWindow):
-    def __init__(self):
-        super().__init__()
+class AppPrincipal:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Gestão de Encartes - Oeste Pharma")
+        self.root.geometry("850x520")
+
         self.config = carregar_config()
         self.db = DBConnection(self.config)
 
-        self.setWindowTitle("Gestão de Encartes - Oeste Pharma")
-        self.setGeometry(100, 100, 900, 550)
+        # Cabeçalho Superior
+        frame_topo = tk.Frame(self.root, bg="#22702C", height=50)
+        frame_topo.pack(fill="x", side="top")
 
-        widget_central = QWidget()
-        self.setCentralWidget(widget_central)
-        layout_principal = QVBoxLayout()
-        widget_central.setLayout(layout_principal)
+        lbl_titulo = tk.Label(frame_topo, text="Painel de Gestão de Encartes", font=("Arial", 14, "bold"), fg="white", bg="#22702C")
+        lbl_titulo.pack(side="left", padx=15, pady=10)
 
-        # Painel de Topo
-        frame_topo = QFrame()
-        frame_topo.setStyleSheet("background-color: #22702C;")
-        layout_topo = QHBoxLayout(frame_topo)
+        btn_atualizar = tk.Button(frame_topo, text="🔄 Atualizar Lista", font=("Arial", 9, "bold"), bg="white", command=self.carregar_encartes, cursor="hand2")
+        btn_atualizar.pack(side="right", padx=15, pady=10)
 
-        lbl_titulo = QLabel("Painel de Gestão de Encartes")
-        lbl_titulo.setStyleSheet("color: white; font-size: 16px; font-weight: bold;")
-        layout_topo.addWidget(lbl_titulo)
+        # Tabela de Encartes (Treeview)
+        frame_tabela = tk.Frame(self.root)
+        frame_tabela.pack(fill="both", expand=True, padx=10, pady=10)
 
-        btn_atualizar = QPushButton("🔄 Atualizar Lista")
-        btn_atualizar.setStyleSheet("background-color: white; font-weight: bold;")
-        btn_atualizar.clicked.connect(self.carregar_encartes)
-        layout_topo.addWidget(btn_atualizar, alignment=Qt.AlignRight)
+        self.tree = ttk.Treeview(frame_tabela, columns=("id", "titulo", "inicio", "fim", "status"), show="headings")
+        self.tree.heading("id", text="ID")
+        self.tree.heading("titulo", text="Título do Encarte")
+        self.tree.heading("inicio", text="Data Início")
+        self.tree.heading("fim", text="Data Fim")
+        self.tree.heading("status", text="Status")
 
-        layout_principal.addWidget(frame_topo)
+        self.tree.column("id", width=60, anchor="center")
+        self.tree.column("titulo", width=380)
+        self.tree.column("inicio", width=110, anchor="center")
+        self.tree.column("fim", width=110, anchor="center")
+        self.tree.column("status", width=90, anchor="center")
 
-        # Tabela de Encartes
-        self.tabela = QTableWidget()
-        self.tabela.setColumnCount(6)
-        self.tabela.setHorizontalHeaderLabels(["ID", "Título do Encarte", "Data Início", "Data Fim", "Status", "Ação"])
-        self.tabela.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        layout_principal.addWidget(self.tabela)
+        scrollbar = ttk.Scrollbar(frame_tabela, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scrollbar.set)
 
+        self.tree.pack(fill="both", expand=True, side="left")
+        scrollbar.pack(side="right", fill="y")
+
+        # Botão de Ação Inferior
+        btn_gerar = tk.Button(
+            self.root, 
+            text="⚡ Gerar Encarte Selecionado", 
+            font=("Arial", 11, "bold"), 
+            bg="#25D366", 
+            fg="white", 
+            command=self.abrir_modal,
+            height=2,
+            cursor="hand2"
+        )
+        btn_gerar.pack(fill="x", padx=10, pady=10)
+
+        self.encartes_cache = []
         self.carregar_encartes()
 
     def carregar_encartes(self):
-        self.thread_carregar = ThreadCarregarEncartes(self.db)
-        self.thread_carregar.sucesso.connect(self.preencher_tabela)
-        self.thread_carregar.erro.connect(lambda msg: QMessageBox.critical(self, "Erro de Conexão", f"Erro ao consultar encartes:\n{msg}"))
-        self.thread_carregar.start()
-
-    def preencher_tabela(self, encartes):
-        self.tabela.setRowCount(0)
-        for i, row in enumerate(encartes):
-            self.tabela.insertRow(i)
-            self.tabela.setItem(i, 0, QTableWidgetItem(str(row["id"])))
-            self.tabela.setItem(i, 1, QTableWidgetItem(str(row["titulo"])))
+        try:
+            query = "SELECT id, titulo, data_inicio, data_fim, ativo FROM encarte ORDER BY id DESC"
+            self.encartes_cache = self.db.executar_consulta(query)
             
-            dt_inicio = row["data_inicio"].strftime("%d/%m/%Y") if row.get("data_inicio") else ""
+            for item in self.tree.get_children():
+                self.tree.delete(item)
+
+            for row in self.encartes_cache:
+                dt_ini = row["data_inicio"].strftime("%d/%m/%Y") if row.get("data_inicio") else ""
+                dt_fim = row["data_fim"].strftime("%d/%m/%Y") if row.get("data_fim") else ""
+                status = "Ativo" if row.get("ativo") else "Inativo"
+                
+                self.tree.insert("", "end", iid=row["id"], values=(row["id"], row["titulo"], dt_ini, dt_fim, status))
+        except Exception as e:
+            messagebox.showerror("Erro de Conexão", f"Não foi possível conectar ao banco de dados PostgreSQL:\n{e}")
+
+    def abrir_modal(self):
+        selected = self.tree.selection()
+        if not selected:
+            messagebox.showwarning("Aviso", "Selecione um encarte na tabela para realizar a geração.")
+            return
+
+        encarte_id = int(selected[0])
+        row = next((item for item in self.encartes_cache if item["id"] == encarte_id), None)
+        if row:
+            dt_ini = row["data_inicio"].strftime("%d/%m/%Y") if row.get("data_inicio") else ""
             dt_fim = row["data_fim"].strftime("%d/%m/%Y") if row.get("data_fim") else ""
-            
-            self.tabela.setItem(i, 2, QTableWidgetItem(dt_inicio))
-            self.tabela.setItem(i, 3, QTableWidgetItem(dt_fim))
-            
-            status = "Ativo" if row.get("ativo") else "Inativo"
-            self.tabela.setItem(i, 4, QTableWidgetItem(status))
-
-            btn_gerar = QPushButton("⚡ Gerar")
-            btn_gerar.setStyleSheet("background-color: #25D366; color: white; font-weight: bold;")
-            btn_gerar.clicked.connect(lambda _, r=row, di=dt_inicio, df=dt_fim: self.abrir_modal_gerar(r["id"], r["titulo"], di, df))
-            self.tabela.setCellWidget(i, 5, btn_gerar)
-
-    def abrir_modal_gerar(self, encarte_id, titulo, dt_inicio, dt_fim):
-        modal = ModalGerarEncarte(encarte_id, titulo, dt_inicio, dt_fim, self.config, self.db, self)
-        modal.exec_()
+            JanelaModalGerar(self.root, row["id"], row["titulo"], dt_ini, dt_fim, self.config, self.db)
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    janela = JanelaPrincipal()
-    janela.show()
-    sys.exit(app.exec_())
+    root = tk.Tk()
+    app = AppPrincipal(root)
+    root.mainloop()
