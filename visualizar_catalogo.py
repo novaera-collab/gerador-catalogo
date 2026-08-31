@@ -296,8 +296,22 @@ class AppVisualizador:
             os.system(f'explorer "{os.path.abspath(os.path.dirname(caminho_target))}"')
 
 if __name__ == "__main__":
-    pasta_param = sys.argv[1] if len(sys.argv) > 1 else os.getcwd()
-    arquivo_jpg = sys.argv[2] if len(sys.argv) > 2 else os.path.join(pasta_param, "CATALOGO_OESTE_PHARMA.JPG")
+    param1 = sys.argv[1] if len(sys.argv) > 1 else ""
+    param2 = sys.argv[2] if len(sys.argv) > 2 else ""
+
+    if param1 and param2:
+        pasta_param = param1
+        arquivo_jpg = param2
+    elif param1:
+        if param1.lower().endswith(".jpg"):
+            arquivo_jpg = param1
+            pasta_param = os.path.dirname(param1)
+        else:
+            pasta_param = param1
+            arquivo_jpg = os.path.join(pasta_param, "CATALOGO_OESTE_PHARMA.JPG")
+    else:
+        pasta_param = os.getcwd()
+        arquivo_jpg = os.path.join(pasta_param, "CATALOGO_OESTE_PHARMA.JPG")
 
     root = tk.Tk()
     app = AppVisualizador(root, pasta_parametros=pasta_param, jpg_path=arquivo_jpg)
