@@ -3,6 +3,7 @@ import os
 import csv
 import glob
 import traceback
+import subprocess
 from PIL import Image, ImageDraw, ImageFont
 
 def hex_to_rgb(hex_str, default=(27, 94, 32)):
@@ -95,7 +96,9 @@ def renderizar_paginas_jpg(config, produtos, caminho_saida_base):
         caminho_saida_base = config.get('saida_jpg', 'CATALOGO.JPG')
 
     pasta_dest = os.path.dirname(caminho_saida_base)
-    if pasta_dest and not os.path.exists(pasta_dest):
+    if not pasta_dest:
+        pasta_dest = os.getcwd()
+    elif not os.path.exists(pasta_dest):
         os.makedirs(pasta_dest, exist_ok=True)
 
     # 🧹 1. EXCLUSÃO PRÉVIA DOS ARQUIVOS JPG ANTIGOS
@@ -237,6 +240,17 @@ def renderizar_paginas_jpg(config, produtos, caminho_saida_base):
 
         # 🔄 2. SALVA E FORÇA O FECHAMENTO DO BUFFER
         img.save(caminho_final_jpg, format="JPEG", quality=98)
+
+    # 3. CHAMA O VISUALIZADOR SOMENTE APÓS TODAS AS PÁGINAS SEREM SALVAS
+    try:
+        caminho_vis = os.path.join(pasta_dest, "VISUALIZAR_CATALOGO.exe")
+        primeira_pag = f"{nome_base}_1{ext}" if total_paginas > 1 else f"{nome_base}{ext}"
+        
+        if os.path.exists(caminho_vis):
+            # Dispara o visualizador garantindo que o lote todo já foi gravado
+            subprocess.Popen([caminho_vis, pasta_dest, primeira_pag])
+    except Exception:
+        pass
 
 if __name__ == "__main__":
     try:
