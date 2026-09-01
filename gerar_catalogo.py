@@ -1,6 +1,7 @@
 import sys
 import os
 import csv
+import glob
 import traceback
 from PIL import Image, ImageDraw, ImageFont
 
@@ -27,6 +28,30 @@ def carregar_e_ajustar_imagem(caminho, largura_max, altura_max):
         return fundo_branco.convert("RGB")
     except Exception:
         return None
+
+def limpar_jpgs_antigos(caminho_saida_base):
+    """Apaga todas as imagens antigas do encarte no diretório de destino antes de gerar novas."""
+    try:
+        pasta_dest = os.path.dirname(caminho_saida_base)
+        if not pasta_dest:
+            pasta_dest = os.getcwd()
+            
+        nome_base = os.path.splitext(os.path.basename(caminho_saida_base))[0]
+        # Remove sufixos numéricos caso a base já venha com '_1'
+        if '_' in nome_base and nome_base.rsplit('_', 1)[1].isdigit():
+            nome_base = nome_base.rsplit('_', 1)[0]
+
+        padrao_busca = os.path.join(pasta_dest, f"{nome_base}*.JPG")
+        padrao_busca_lower = os.path.join(pasta_dest, f"{nome_base}*.jpg")
+        
+        arquivos = glob.glob(padrao_busca) + glob.glob(padrao_busca_lower)
+        for arq in set(arquivos):
+            try:
+                os.remove(arq)
+            except Exception:
+                pass
+    except Exception:
+        pass
 
 def renderizar_paginas_jpg(config, produtos, caminho_saida_base):
     # Limite fixo de 9 produtos por página para manter alta definição no WhatsApp
@@ -72,6 +97,9 @@ def renderizar_paginas_jpg(config, produtos, caminho_saida_base):
     pasta_dest = os.path.dirname(caminho_saida_base)
     if pasta_dest and not os.path.exists(pasta_dest):
         os.makedirs(pasta_dest, exist_ok=True)
+
+    # 🧹 1. EXCLUSÃO PRÉVIA DOS ARQUIVOS JPG ANTIGOS
+    limpar_jpgs_antigos(caminho_saida_base)
 
     nome_base, ext = os.path.splitext(caminho_saida_base)
     if not ext:
@@ -207,6 +235,7 @@ def renderizar_paginas_jpg(config, produtos, caminho_saida_base):
         else:
             caminho_final_jpg = f"{nome_base}{ext}"
 
+        # 🔄 2. SALVA E FORÇA O FECHAMENTO DO BUFFER
         img.save(caminho_final_jpg, format="JPEG", quality=98)
 
 if __name__ == "__main__":
