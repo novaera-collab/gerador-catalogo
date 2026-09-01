@@ -38,7 +38,6 @@ def limpar_jpgs_antigos(caminho_saida_base):
             pasta_dest = os.getcwd()
             
         nome_base = os.path.splitext(os.path.basename(caminho_saida_base))[0]
-        # Remove sufixos numéricos caso a base já venha com '_1'
         if '_' in nome_base and nome_base.rsplit('_', 1)[1].isdigit():
             nome_base = nome_base.rsplit('_', 1)[0]
 
@@ -55,7 +54,6 @@ def limpar_jpgs_antigos(caminho_saida_base):
         pass
 
 def renderizar_paginas_jpg(config, produtos, caminho_saida_base):
-    # Limite fixo de 9 produtos por página para manter alta definição no WhatsApp
     PRODUTOS_POR_PAGINA = 9
     COLUNAS = 3
     LARGURA_TOTAL = 1600
@@ -67,7 +65,6 @@ def renderizar_paginas_jpg(config, produtos, caminho_saida_base):
     ALTURA_CABECALHO = 170
     ALTURA_RODAPE = 160
 
-    # Configuração de Cores
     cor_topo_rodape  = hex_to_rgb(config.get('cor_tit_rodape'), (27, 94, 32))
     cor_tarja_bg     = hex_to_rgb(config.get('cor_grid_tarja'), (78, 238, 148))
     cor_preco_texto  = hex_to_rgb(config.get('cor_grid_preco'), (0, 0, 0))
@@ -76,7 +73,6 @@ def renderizar_paginas_jpg(config, produtos, caminho_saida_base):
     largura_card = largura_util // COLUNAS
     altura_card = 460
 
-    # Carregamento de Fontes
     try:
         font_titulo_bold  = ImageFont.truetype("arialbd.ttf", 40)
         font_sub_regular   = ImageFont.truetype("arial.ttf", 22)
@@ -101,14 +97,12 @@ def renderizar_paginas_jpg(config, produtos, caminho_saida_base):
     elif not os.path.exists(pasta_dest):
         os.makedirs(pasta_dest, exist_ok=True)
 
-    # 🧹 1. EXCLUSÃO PRÉVIA DOS ARQUIVOS JPG ANTIGOS
     limpar_jpgs_antigos(caminho_saida_base)
 
     nome_base, ext = os.path.splitext(caminho_saida_base)
     if not ext:
         ext = ".JPG"
 
-    # Geração de cada página JPG
     for num_pag in range(total_paginas):
         prods_pagina = produtos[num_pag * PRODUTOS_POR_PAGINA : (num_pag + 1) * PRODUTOS_POR_PAGINA]
 
@@ -232,23 +226,25 @@ def renderizar_paginas_jpg(config, produtos, caminho_saida_base):
             y_l2 = y_rodape + 95
             draw.text((x_val, y_l2), validade_str, fill="#E0E0E0", font=font_rod_validade)
 
-        # Definindo o nome de saída da página .JPG
         if total_paginas > 1:
             caminho_final_jpg = f"{nome_base}_{num_pag + 1}{ext}"
         else:
             caminho_final_jpg = f"{nome_base}{ext}"
 
-        # 🔄 2. SALVA E FORÇA O FECHAMENTO DO BUFFER
         img.save(caminho_final_jpg, format="JPEG", quality=98)
 
-    # 3. CHAMA O VISUALIZADOR SOMENTE APÓS TODAS AS PÁGINAS SEREM SALVAS
+    # 3. CHAMA O VISUALIZADOR ATUALIZADO (.PY OU .EXE)
     try:
-        caminho_vis = os.path.join(pasta_dest, "VISUALIZAR_CATALOGO.exe")
         primeira_pag = f"{nome_base}_1{ext}" if total_paginas > 1 else f"{nome_base}{ext}"
         
-        if os.path.exists(caminho_vis):
-            # Dispara o visualizador garantindo que o lote todo já foi gravado
-            subprocess.Popen([caminho_vis, pasta_dest, primeira_pag])
+        # Prioriza a versão em Python (visualizar_catalogo.py)
+        caminho_vis_py = os.path.join(os.path.dirname(__file__) if '__file__' in globals() else os.getcwd(), "visualizar_catalogo.py")
+        caminho_vis_exe = os.path.join(pasta_dest, "VISUALIZAR_CATALOGO.exe")
+
+        if os.path.exists(caminho_vis_py):
+            subprocess.Popen([sys.executable, caminho_vis_py, pasta_dest, primeira_pag])
+        elif os.path.exists(caminho_vis_exe):
+            subprocess.Popen([caminho_vis_exe, pasta_dest, primeira_pag])
     except Exception:
         pass
 
