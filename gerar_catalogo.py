@@ -232,19 +232,14 @@ def renderizar_paginas_jpg(config, produtos, caminho_saida_base):
             caminho_final_jpg = f"{nome_base}{ext}"
 
         img.save(caminho_final_jpg, format="JPEG", quality=98)
-
-    # 3. CHAMA O VISUALIZADOR ATUALIZADO (.PY OU .EXE)
+    # 3. CHAMA O VISUALIZADOR SOMENTE APÓS TODAS AS PÁGINAS SEREM SALVAS
     try:
+        caminho_vis = os.path.join(pasta_dest, "VISUALIZAR_CATALOGO.exe")
         primeira_pag = f"{nome_base}_1{ext}" if total_paginas > 1 else f"{nome_base}{ext}"
         
-        # Prioriza a versão em Python (visualizar_catalogo.py)
-        caminho_vis_py = os.path.join(os.path.dirname(__file__) if '__file__' in globals() else os.getcwd(), "visualizar_catalogo.py")
-        caminho_vis_exe = os.path.join(pasta_dest, "VISUALIZAR_CATALOGO.exe")
-
-        if os.path.exists(caminho_vis_py):
-            subprocess.Popen([sys.executable, caminho_vis_py, pasta_dest, primeira_pag])
-        elif os.path.exists(caminho_vis_exe):
-            subprocess.Popen([caminho_vis_exe, pasta_dest, primeira_pag])
+        if os.path.exists(caminho_vis):
+            # Dispara o visualizador garantindo que o lote todo já foi gravado
+            subprocess.Popen([caminho_vis, pasta_dest, primeira_pag])
     except Exception:
         pass
 
