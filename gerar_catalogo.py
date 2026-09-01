@@ -232,13 +232,13 @@ def renderizar_paginas_jpg(config, produtos, caminho_saida_base):
             caminho_final_jpg = f"{nome_base}{ext}"
 
         img.save(caminho_final_jpg, format="JPEG", quality=98)
-    # 3. CHAMA O VISUALIZADOR SOMENTE APÓS TODAS AS PÁGINAS SEREM SALVAS
+
+    # 4. CHAMA O VISUALIZADOR UMA ÚNICA VEZ APÓS CONCLUIR O LAÇO DE TODAS AS PÁGINAS
     try:
         caminho_vis = os.path.join(pasta_dest, "VISUALIZAR_CATALOGO.exe")
         primeira_pag = f"{nome_base}_1{ext}" if total_paginas > 1 else f"{nome_base}{ext}"
         
         if os.path.exists(caminho_vis):
-            # Dispara o visualizador garantindo que o lote todo já foi gravado
             subprocess.Popen([caminho_vis, pasta_dest, primeira_pag])
     except Exception:
         pass
