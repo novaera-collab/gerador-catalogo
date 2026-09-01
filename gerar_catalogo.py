@@ -3,7 +3,6 @@ import os
 import csv
 import glob
 import traceback
-import subprocess
 from PIL import Image, ImageDraw, ImageFont
 
 def hex_to_rgb(hex_str, default=(27, 94, 32)):
@@ -83,7 +82,7 @@ def renderizar_paginas_jpg(config, produtos, caminho_saida_base):
         font_rod_destaque  = ImageFont.truetype("arialbd.ttf", 26)
         font_rod_validade  = ImageFont.truetype("arial.ttf", 18)
     except IOError:
-        font_titulo_bold = font_sub_regular = font_cod_bold = font_desc_bold = font_marca = font_preco_bold = font_rod_destaque = font_rod_validade = ImageFont.load_default()
+        font_titulo_bold = font_sub_regular = font_cod_bold = font_desc_bold = font_marca = font_preco_bold = font_rod_validade = ImageFont.load_default()
 
     total_produtos = len(produtos)
     total_paginas = (total_produtos + PRODUTOS_POR_PAGINA - 1) // PRODUTOS_POR_PAGINA if total_produtos > 0 else 1
@@ -231,17 +230,8 @@ def renderizar_paginas_jpg(config, produtos, caminho_saida_base):
         else:
             caminho_final_jpg = f"{nome_base}{ext}"
 
+        # Salva apenas a imagem JPG gerada
         img.save(caminho_final_jpg, format="JPEG", quality=98)
-
-    # 4. CHAMA O VISUALIZADOR UMA ÚNICA VEZ APÓS CONCLUIR O LAÇO DE TODAS AS PÁGINAS
-    try:
-        caminho_vis = os.path.join(pasta_dest, "VISUALIZAR_CATALOGO.exe")
-        primeira_pag = f"{nome_base}_1{ext}" if total_paginas > 1 else f"{nome_base}{ext}"
-        
-        if os.path.exists(caminho_vis):
-            subprocess.Popen([caminho_vis, pasta_dest, primeira_pag])
-    except Exception:
-        pass
 
 if __name__ == "__main__":
     try:
