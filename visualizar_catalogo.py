@@ -113,9 +113,10 @@ class AppVisualizador:
         self.root.attributes('-topmost', True)
         self.root.after_idle(self.root.attributes, '-topmost', False)
 
-        # Atalhos do teclado para mudar de página
+        # Atalhos do teclado para mudar de página e atualizar
         self.root.bind("<Left>", lambda event: self.pagina_anterior())
         self.root.bind("<Right>", lambda event: self.proxima_pagina())
+        self.root.bind("<F5>", lambda event: self.atualizar_paginas())
 
         # PAINEL SUPERIOR (MENU E WHATSAPP)
         frame_topo = tk.Frame(self.root, bg="#22702C")
@@ -135,6 +136,18 @@ class AppVisualizador:
             command=self.abrir_whatsapp
         )
         btn_whats.pack(side="right", padx=15)
+
+        btn_atualizar = tk.Button(
+            frame_topo, 
+            text="🔄 Atualizar (F5)", 
+            font=("Arial", 10, "bold"), 
+            bg="#0288D1", 
+            fg="white", 
+            activebackground="#0277BD",
+            cursor="hand2",
+            command=self.atualizar_paginas
+        )
+        btn_atualizar.pack(side="right", padx=5)
 
         btn_pasta = tk.Button(
             frame_topo, 
@@ -213,6 +226,17 @@ class AppVisualizador:
                 resultado_final.append(item)
 
         return resultado_final
+
+    def atualizar_paginas(self):
+        """Recarrega a lista de imagens da pasta e atualiza a exibição (F5)"""
+        novas_paginas = self.localizar_paginas_geradas(self.jpg_path)
+        self.lista_paginas = novas_paginas
+        
+        # Garante que o índice atual permaneça válido dentro do novo total
+        if self.indice_atual >= len(self.lista_paginas):
+            self.indice_atual = max(0, len(self.lista_paginas) - 1)
+            
+        self.atualizar_visualizacao()
 
     def atualizar_visualizacao(self):
         """Redesenha a tela conforme a página selecionada"""
