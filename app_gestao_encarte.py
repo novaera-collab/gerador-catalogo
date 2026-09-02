@@ -157,6 +157,176 @@ def salvar_parametros_banco(p):
     conn.close()
 
 # ==============================================================================
+# JANELA CADASTRO RÁPIDO DE NOVO CONTATO
+# ==============================================================================
+class NovoContatoModal(ctk.CTkToplevel):
+    def __init__(self, parent, callback_sucesso):
+        super().__init__(parent)
+        self.callback_sucesso = callback_sucesso
+        self.title("Novo Contato")
+        self.geometry("380x200")
+        self.grab_set()
+
+        ctk.CTkLabel(self, text="Nome:").pack(anchor="w", padx=20, pady=(15, 2))
+        self.txt_nome = ctk.CTkEntry(self, width=320)
+        self.txt_nome.pack(padx=20, pady=2)
+
+        ctk.CTkLabel(self, text="Telefone:").pack(anchor="w", padx=20, pady=(10, 2))
+        self.txt_fone = ctk.CTkEntry(self, width=320, placeholder_text="(45) 99999-9999")
+        self.txt_fone.pack(padx=20, pady=2)
+
+        btn_salvar = ctk.CTkButton(self, text="Salvar Contato", fg_color="#2E7D32", command=self.salvar)
+        btn_salvar.pack(pady=15)
+
+    def salvar(self):
+        nome = self.txt_nome.get().strip()
+        fone = self.txt_fone.get().strip()
+        schema = get_schema()
+
+        if not nome or not fone:
+            messagebox.showwarning("Atenção", "Informe o Nome e o Telefone.", parent=self)
+            return
+
+        try:
+            conn = get_connection()
+            cur = conn.cursor()
+            cur.execute(f"INSERT INTO {schema}.encarte_contatos (nome, telefone) VALUES (%s, %s)", (nome, fone))
+            conn.commit()
+            conn.close()
+            messagebox.showinfo("Sucesso", "Contato cadastrado!", parent=self)
+            self.callback_sucesso(nome)
+            self.destroy()
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao salvar contato:\n{e}", parent=self)
+
+# ==============================================================================
+# JANELA MODAL PARA GERAR ENCARTE
+# ==============================================================================
+class GerarEncarteModal(ctk.CTkToplevel):
+    def __init__(self, parent, encarte_id, encarte_titulo):
+        super().__init__(parent)
+        self.encarte_id = encarte_id
+        self.encarte_titulo = encarte_titulo
+
+        self.title(f"Gerar Encarte #{encarte_id}")
+        self.geometry("460x280")
+        self.grab_set()
+
+        self.contatos_map = {}
+
+        ctk.CTkLabel(self, text=f"Gerar Encarte: {encarte_titulo}", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=(15, 10))
+
+        # --- SELEÇÃO DE CONTATO ---
+        frame_ct = ctk.CTkFrame(self, fg_color="transparent")
+        frame_ct.pack(fill="x", padx=20, pady=5)
+
+        ctk.CTkLabel(frame_ct, text="Contato:").grid(row=0, column=0, sticky="w", padx=5)
+        self.cmb_contato = ctk.CTkComboBox(frame_ct, width=240, values=[])
+        self.cmb_contato.grid(row=0, column=1, padx=5)
+
+        btn_novo_contato = ctk.CTkButton(frame_ct, text="+ Novo", width=60, fg_color="#1976D2", command=self.abrir_novo_contato)
+        btn_novo_contato.grid(row=0, column=2, padx=5)
+
+        # --- FILTRO DE SALDO ---
+        frame_sd = ctk.CTkFrame(self, fg_color="transparent")
+        frame_sd.pack(fill="x", padx=20, pady=10)
+
+        ctk.CTkLabel(frame_sd, text="Saldo:").grid(row=0, column=0, sticky="w", padx=5)
+        self.var_saldo = ctk.StringVar(value="Positivos")
+        rb_todos = ctk.CTkRadioButton(frame_sd, text="Todos", variable=self.var_saldo, value="Todos")
+        rb_todos.grid(row=0, column=1, padx=15)
+        rb_pos = ctk.CTkRadioButton(frame_sd, text="Positivos", variable=self.var_saldo, value="Positivos")
+        rb_pos.grid(row=0, column=2, padx=15)
+
+        # --- BOTÃO CONFIRMAR ---
+        btn_gerar = ctk.CTkButton(self, text="Confirmar e Gerar CSV", fg_color="#1B5E20", font=ctk.CTkFont(weight="bold"), height=35, command=self.processar_geracao)
+        btn_gerar.pack(pady=20)
+
+        self.carregar_contatos()
+
+    def carregar_contatos(self, selecionar_nome=None):
+        schema = get_schema()
+        try:
+            conn = get_connection()
+            cur = conn.cursor()
+            cur.execute(f"SELECT nome, telefone FROM {schema}.encarte_contatos ORDER BY nome")
+            rows = cur.fetchall()
+            conn.close()
+
+            self.contatos_map = {r['nome']: r['telefone'] for r in rows}
+            nomes = list(self.contatos_map.keys())
+
+            if not nomes:
+                nomes = ["NENHUM CONTATO"]
+
+            self.cmb_contato.configure(values=nomes)
+
+            if selecionar_nome and selecionar_nome in self.contatos_map:
+                self.cmb_contato.set(selecionar_nome)
+            elif nomes:
+                self.cmb_contato.set(nomes[0])
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao carregar contatos:\n{e}", parent=self)
+
+    def abrir_novo_contato(self):
+        NovoContatoModal(self, callback_sucesso=lambda nome: self.carregar_contatos(selecionar_nome=nome))
+
+    def processar_geracao(self):
+        schema = get_schema()
+        contato_sel = self.cmb_contato.get()
+        fone_sel = self.contatos_map.get(contato_sel, "")
+
+        params = carregar_parametros_banco()
+        dir_encarte = params.get("dir_encarte", "").strip()
+        dir_csv = params.get("dir_csv", "").strip()
+
+        if not dir_encarte or not os.path.exists(dir_encarte):
+            messagebox.showerror("Erro de Configuração", "Diretório de encarte (dir_encarte) inválido ou não configurado nos Parâmetros.", parent=self)
+            return
+
+        if not dir_csv or not os.path.exists(dir_csv):
+            messagebox.showerror("Erro de Configuração", "Diretório do CSV (dir_csv) inválido ou não configurado nos Parâmetros.", parent=self)
+            return
+
+        path_sql = os.path.join(dir_encarte, "consulta_encarte.sql")
+        if not os.path.exists(path_sql):
+            messagebox.showerror("Arquivo Ausente", f"O arquivo 'consulta_encarte.sql' não foi encontrado em:\n{dir_encarte}", parent=self)
+            return
+
+        # Filtro de Saldo
+        filtro_saldo_sql = "" if self.var_saldo.get() == "Todos" else "WHERE e.fsaldo > 0"
+
+        try:
+            with open(path_sql, "r", encoding="utf-8") as f:
+                sql_template = f.read()
+
+            # Substituição das variáveis na query SQL
+            sql_final = sql_template.replace("{SCHEMA}", schema) \
+                                    .replace("{ID_ENCARTE}", str(self.encarte_id)) \
+                                    .replace("{TABELA_PRECO}", "1") \
+                                    .replace("{contato informado no momento da geraçao do catalogo}", f"'{contato_sel}'") \
+                                    .replace("{FILTRO_SALDO}", filtro_saldo_sql)
+
+            conn = get_connection()
+            cur = conn.cursor()
+            cur.execute(sql_final)
+            linhas = cur.fetchall()
+            conn.close()
+
+            path_out_csv = os.path.join(dir_csv, f"encarte_{self.encarte_id}.csv")
+
+            with open(path_out_csv, "w", encoding="win1252", errors="ignore") as f_csv:
+                for row in linhas:
+                    f_csv.write(f"{row['linha_csv']}\n")
+
+            messagebox.showinfo("Sucesso", f"Arquivo de encarte gerado com sucesso!\n\nSalvo em: {path_out_csv}", parent=self)
+            self.destroy()
+
+        except Exception as e:
+            messagebox.showerror("Erro na Geração", f"Falha ao executar consulta ou gerar arquivo:\n{e}", parent=self)
+
+# ==============================================================================
 # JANELA DE PARÂMETROS DA CONEXÃO E DIRETÓRIOS
 # ==============================================================================
 class ParametrosWindow(ctk.CTkToplevel):
@@ -214,7 +384,7 @@ class ParametrosWindow(ctk.CTkToplevel):
         )
         btn_criar_tabelas.grid(row=6, column=0, columnspan=2, pady=20, padx=10, sticky="ew")
 
-        # --- ABA 2: DIRETÓRIOS E DESIGN (ENCARTE_PARAMETROS) ---
+        # --- ABA 2: DIRETÓRIOS E DESIGN ---
         self.txt_dir_encarte = self._criar_campo_caminho(tab_dirs, "Diretório Executáveis:", 0, params_db.get("dir_encarte", ""), pasta=True)
         self.txt_dir_csv = self._criar_campo_caminho(tab_dirs, "Diretório CSV:", 1, params_db.get("dir_csv", ""), pasta=True)
         self.txt_dir_jpg = self._criar_campo_caminho(tab_dirs, "Diretório JPG:", 2, params_db.get("dir_jpg", ""), pasta=True)
@@ -274,7 +444,6 @@ class ParametrosWindow(ctk.CTkToplevel):
             entry_widget.insert(0, caminho_formatado)
 
     def criar_tabelas_banco(self):
-        # Salva primeiro os parâmetros locais de conexão
         self.salvar_apenas_config_json()
         schema = get_schema()
         
@@ -369,7 +538,7 @@ class ParametrosWindow(ctk.CTkToplevel):
             messagebox.showinfo("Sucesso", "Todos os parâmetros foram salvos com sucesso!", parent=self)
             self.destroy()
         except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao salvar parâmetros na tabela do banco:\n{e}\n\nCertifique-se de que as tabelas já foram criadas.", parent=self)
+            messagebox.showerror("Erro", f"Erro ao salvar parâmetros na tabela do banco:\n{e}", parent=self)
 
 # ==============================================================================
 # JANELA MODAL DE PESQUISA DE PRODUTO
@@ -783,7 +952,7 @@ class AppPrincipal(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Gestão de Encartes - v2.0")
-        self.geometry("750x520")
+        self.geometry("820x520")
 
         frame_topo = ctk.CTkFrame(self)
         frame_topo.pack(fill="x", padx=15, pady=(10, 5))
@@ -866,16 +1035,22 @@ class AppPrincipal(ctk.CTk):
                 ctk.CTkLabel(row, text=lbl_info, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=cor_status).pack(side="left", padx=10, fill="x", expand=True)
 
                 btn_excluir = ctk.CTkButton(
-                    row, text="Excluir", width=70, fg_color="#C62828", hover_color="#B71C1C",
+                    row, text="Excluir", width=65, fg_color="#C62828", hover_color="#B71C1C",
                     command=lambda e_id=enc['id'], e_tit=enc['titulo']: self.excluir_encarte(e_id, e_tit)
                 )
                 btn_excluir.pack(side="right", padx=(2, 5), pady=5)
 
                 btn_editar = ctk.CTkButton(
-                    row, text="Editar", width=70, 
+                    row, text="Editar", width=65, 
                     command=lambda e_id=enc['id']: self.editar_encarte(e_id)
                 )
                 btn_editar.pack(side="right", padx=2, pady=5)
+
+                btn_gerar = ctk.CTkButton(
+                    row, text="Gerar Encarte", width=100, fg_color="#2E7D32", hover_color="#1B5E20",
+                    command=lambda e_id=enc['id'], e_tit=enc['titulo']: self.gerar_encarte(e_id, e_tit)
+                )
+                btn_gerar.pack(side="right", padx=2, pady=5)
 
         except Exception as e:
             ctk.CTkLabel(self.frame_lista, text=f"Erro ao consultar o banco de dados:\n{e}", text_color="#EF5350").pack(pady=20)
@@ -908,6 +1083,9 @@ class AppPrincipal(ctk.CTk):
 
     def editar_encarte(self, encarte_id):
         FormEncarteWindow(self, encarte_id=encarte_id, callback_refresh=self.carregar_encartes)
+
+    def gerar_encarte(self, encarte_id, titulo):
+        GerarEncarteModal(self, encarte_id=encarte_id, encarte_titulo=titulo)
 
 if __name__ == "__main__":
     ctk.set_appearance_mode("Dark")
