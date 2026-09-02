@@ -86,22 +86,94 @@ def get_schema():
     return schema if schema else "public"
 
 # ==============================================================================
+# FUNÇÕES DE SUPORTE AOS PARÂMETROS NO BANCO DE DADOS
+# ==============================================================================
+def carregar_parametros_banco():
+    schema = get_schema()
+    params_padrao = {
+        "dir_encarte": "",
+        "dir_csv": "",
+        "dir_jpg": "",
+        "cor_tit_rodape": "",
+        "cor_grid_tarja": "",
+        "cor_grid_preco": "",
+        "cabecalho_logo": "",
+        "cabecalho_site": "",
+        "rodape_logo_fone": ""
+    }
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute(f"SELECT * FROM {schema}.encarte_parametros LIMIT 1;")
+        res = cur.fetchone()
+        conn.close()
+        if res:
+            for k in params_padrao.keys():
+                params_padrao[k] = res.get(k, "") or ""
+    except Exception:
+        pass
+    return params_padrao
+
+def salvar_parametros_banco(p):
+    schema = get_schema()
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(f"SELECT id FROM {schema}.encarte_parametros LIMIT 1;")
+    res = cur.fetchone()
+    
+    if res:
+        query = f"""
+            UPDATE {schema}.encarte_parametros SET
+                dir_encarte = %s,
+                dir_csv = %s,
+                dir_jpg = %s,
+                cor_tit_rodape = %s,
+                cor_grid_tarja = %s,
+                cor_grid_preco = %s,
+                cabecalho_logo = %s,
+                cabecalho_site = %s,
+                rodape_logo_fone = %s
+            WHERE id = %s
+        """
+        cur.execute(query, (
+            p.get("dir_encarte", ""), p.get("dir_csv", ""), p.get("dir_jpg", ""),
+            p.get("cor_tit_rodape", ""), p.get("cor_grid_tarja", ""), p.get("cor_grid_preco", ""),
+            p.get("cabecalho_logo", ""), p.get("cabecalho_site", ""), p.get("rodape_logo_fone", ""),
+            res["id"]
+        ))
+    else:
+        query = f"""
+            INSERT INTO {schema}.encarte_parametros (
+                dir_encarte, dir_csv, dir_jpg, cor_tit_rodape, cor_grid_tarja,
+                cor_grid_preco, cabecalho_logo, cabecalho_site, rodape_logo_fone
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        cur.execute(query, (
+            p.get("dir_encarte", ""), p.get("dir_csv", ""), p.get("dir_jpg", ""),
+            p.get("cor_tit_rodape", ""), p.get("cor_grid_tarja", ""), p.get("cor_grid_preco", ""),
+            p.get("cabecalho_logo", ""), p.get("cabecalho_site", ""), p.get("rodape_logo_fone", "")
+        ))
+    conn.commit()
+    conn.close()
+
+# ==============================================================================
 # JANELA DE PARÂMETROS DA CONEXÃO E DIRETÓRIOS
 # ==============================================================================
 class ParametrosWindow(ctk.CTkToplevel):
     def __init__(self, parent):
         super().__init__(parent)
         self.title("Parâmetros do Sistema")
-        self.geometry("580x540")
+        self.geometry("640x620")
         self.grab_set()
 
         cfg = carregar_config()
+        params_db = carregar_parametros_banco()
 
         tabview = ctk.CTkTabview(self)
         tabview.pack(fill="both", expand=True, padx=15, pady=10)
 
         tab_banco = tabview.add("Conexão com Banco de Dados")
-        tab_dirs = tabview.add("Diretórios e Arquivos")
+        tab_dirs = tabview.add("Diretórios e Design")
 
         # --- ABA 1: BANCO DE DADOS ---
         ctk.CTkLabel(tab_banco, text="Host / IP:").grid(row=0, column=0, padx=10, pady=6, sticky="w")
@@ -115,7 +187,7 @@ class ParametrosWindow(ctk.CTkToplevel):
         self.txt_db.grid(row=1, column=1, padx=10, pady=6)
 
         ctk.CTkLabel(tab_banco, text="Schema:").grid(row=2, column=0, padx=10, pady=6, sticky="w")
-        self.txt_schema = ctk.CTkEntry(tab_banco, width=280, placeholder_text="ex: public ou encartes_app")
+        self.txt_schema = ctk.CTkEntry(tab_banco, width=280, placeholder_text="ex: public ou dk")
         self.txt_schema.insert(0, cfg.get("schema", "public"))
         self.txt_schema.grid(row=2, column=1, padx=10, pady=6)
 
@@ -134,12 +206,41 @@ class ParametrosWindow(ctk.CTkToplevel):
         self.txt_port.insert(0, cfg.get("port", "5432"))
         self.txt_port.grid(row=5, column=1, padx=10, pady=6)
 
-        # --- ABA 2: DIRETÓRIOS E LOGOS ---
-        self.txt_dir_encarte = self._criar_campo_caminho(tab_dirs, "Diretório Encarte:", 0, cfg.get("dir_encarte", ""), pasta=True)
-        self.txt_dir_csv = self._criar_campo_caminho(tab_dirs, "Diretório CSV:", 1, cfg.get("dir_csv", ""), pasta=True)
-        self.txt_dir_jpg = self._criar_campo_caminho(tab_dirs, "Diretório JPG:", 2, cfg.get("dir_jpg", ""), pasta=True)
-        self.txt_logo = self._criar_campo_caminho(tab_dirs, "Logo Principal:", 3, cfg.get("path_logo", ""), pasta=False)
-        self.txt_logo_whats = self._criar_campo_caminho(tab_dirs, "Logo WhatsApp:", 4, cfg.get("path_logo_whats", ""), pasta=False)
+        btn_criar_tabelas = ctk.CTkButton(
+            tab_banco, text="Criar Tabelas no Banco de Dados", 
+            fg_color="#0288D1", hover_color="#0277BD", 
+            font=ctk.CTkFont(weight="bold"), height=35,
+            command=self.criar_tabelas_banco
+        )
+        btn_criar_tabelas.grid(row=6, column=0, columnspan=2, pady=20, padx=10, sticky="ew")
+
+        # --- ABA 2: DIRETÓRIOS E DESIGN (ENCARTE_PARAMETROS) ---
+        self.txt_dir_encarte = self._criar_campo_caminho(tab_dirs, "Diretório Executáveis:", 0, params_db.get("dir_encarte", ""), pasta=True)
+        self.txt_dir_csv = self._criar_campo_caminho(tab_dirs, "Diretório CSV:", 1, params_db.get("dir_csv", ""), pasta=True)
+        self.txt_dir_jpg = self._criar_campo_caminho(tab_dirs, "Diretório JPG:", 2, params_db.get("dir_jpg", ""), pasta=True)
+        
+        self.txt_cabecalho_logo = self._criar_campo_caminho(tab_dirs, "Cabeçalho Logo:", 3, params_db.get("cabecalho_logo", ""), pasta=False)
+        self.txt_rodape_logo_fone = self._criar_campo_caminho(tab_dirs, "Rodapé Logo Fone:", 4, params_db.get("rodape_logo_fone", ""), pasta=False)
+
+        ctk.CTkLabel(tab_dirs, text="Cabeçalho Site:").grid(row=5, column=0, padx=10, pady=6, sticky="w")
+        self.txt_cabecalho_site = ctk.CTkEntry(tab_dirs, width=240)
+        self.txt_cabecalho_site.insert(0, params_db.get("cabecalho_site", ""))
+        self.txt_cabecalho_site.grid(row=5, column=1, padx=5, pady=6)
+
+        ctk.CTkLabel(tab_dirs, text="Cor Título/Rodapé:").grid(row=6, column=0, padx=10, pady=6, sticky="w")
+        self.txt_cor_tit_rodape = ctk.CTkEntry(tab_dirs, width=240, placeholder_text="#HEX ou Código Cor")
+        self.txt_cor_tit_rodape.insert(0, params_db.get("cor_tit_rodape", ""))
+        self.txt_cor_tit_rodape.grid(row=6, column=1, padx=5, pady=6)
+
+        ctk.CTkLabel(tab_dirs, text="Cor Grid Tarja:").grid(row=7, column=0, padx=10, pady=6, sticky="w")
+        self.txt_cor_grid_tarja = ctk.CTkEntry(tab_dirs, width=240)
+        self.txt_cor_grid_tarja.insert(0, params_db.get("cor_grid_tarja", ""))
+        self.txt_cor_grid_tarja.grid(row=7, column=1, padx=5, pady=6)
+
+        ctk.CTkLabel(tab_dirs, text="Cor Grid Preço:").grid(row=8, column=0, padx=10, pady=6, sticky="w")
+        self.txt_cor_grid_preco = ctk.CTkEntry(tab_dirs, width=240)
+        self.txt_cor_grid_preco.insert(0, params_db.get("cor_grid_preco", ""))
+        self.txt_cor_grid_preco.grid(row=8, column=1, padx=5, pady=6)
 
         btn_salvar = ctk.CTkButton(self, text="Salvar Tudo", fg_color="#1B5E20", font=ctk.CTkFont(weight="bold"), height=35, command=self.salvar)
         btn_salvar.pack(pady=(0, 15))
@@ -164,7 +265,7 @@ class ParametrosWindow(ctk.CTkToplevel):
             caminho = filedialog.askopenfilename(
                 parent=self,
                 title="Selecione a Imagem", 
-                filetypes=[("Imagens", "*.png *.jpg *.jpeg"), ("Todos os Arquivos", "*.*")]
+                filetypes=[("Imagens", "*.png *.jpg *.jpeg *.bmp"), ("Todos os Arquivos", "*.*")]
             )
         
         if caminho:
@@ -172,23 +273,103 @@ class ParametrosWindow(ctk.CTkToplevel):
             entry_widget.delete(0, "end")
             entry_widget.insert(0, caminho_formatado)
 
-    def salvar(self):
+    def criar_tabelas_banco(self):
+        # Salva primeiro os parâmetros locais de conexão
+        self.salvar_apenas_config_json()
+        schema = get_schema()
+        
+        sql_script = f"""
+        CREATE SCHEMA IF NOT EXISTS {schema};
+
+        CREATE SEQUENCE IF NOT EXISTS {schema}.encarte_id_seq;
+        CREATE SEQUENCE IF NOT EXISTS {schema}.encarte_item_id_seq;
+        CREATE SEQUENCE IF NOT EXISTS {schema}.encarte_parametros_id_seq;
+
+        CREATE TABLE IF NOT EXISTS {schema}.encarte
+        (
+            id integer NOT NULL DEFAULT nextval('{schema}.encarte_id_seq'::regclass),
+            titulo character varying(100) COLLATE pg_catalog."default" NOT NULL,
+            data_inicio date NOT NULL,
+            data_fim date NOT NULL,
+            status character varying(20) COLLATE pg_catalog."default" DEFAULT 'ATIVO'::character varying,
+            criado_em timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT encarte_pkey PRIMARY KEY (id)
+        );
+
+        CREATE TABLE IF NOT EXISTS {schema}.encarte_item
+        (
+            id integer NOT NULL DEFAULT nextval('{schema}.encarte_item_id_seq'::regclass),
+            encarte_id integer,
+            codigo_prod character varying(30) COLLATE pg_catalog."default" NOT NULL,
+            preco_oferta numeric(12,2) NOT NULL,
+            qtde_oferta numeric(12,2) NOT NULL,
+            ordem integer DEFAULT 0,
+            CONSTRAINT encarte_item_pkey PRIMARY KEY (id)
+        );
+
+        CREATE TABLE IF NOT EXISTS {schema}.encarte_contatos
+        (
+            nome character varying(100),
+            telefone character varying(30)
+        );
+
+        CREATE TABLE IF NOT EXISTS {schema}.encarte_parametros
+        (
+            id integer NOT NULL DEFAULT nextval('{schema}.encarte_parametros_id_seq'::regclass),
+            dir_encarte character varying(255),
+            dir_csv character varying(255),
+            dir_jpg character varying(255),
+            cor_tit_rodape character varying(50),
+            cor_grid_tarja character varying(50),
+            cor_grid_preco character varying(50),
+            cabecalho_logo character varying(255),
+            cabecalho_site character varying(255),
+            rodape_logo_fone character varying(255),
+            CONSTRAINT encarte_parametros_pkey PRIMARY KEY (id)
+        );
+        """
+        try:
+            conn = get_connection()
+            cur = conn.cursor()
+            cur.execute(sql_script)
+            conn.commit()
+            conn.close()
+            messagebox.showinfo("Sucesso", f"Tabelas criadas/verificadas com sucesso no schema '{schema}'!", parent=self)
+        except Exception as e:
+            messagebox.showerror("Erro ao Criar Tabelas", f"Falha na execução do SQL:\n{e}", parent=self)
+
+    def salvar_apenas_config_json(self):
         cfg = {
             "host": self.txt_host.get().strip(),
             "database": self.txt_db.get().strip(),
             "schema": self.txt_schema.get().strip(),
             "user": self.txt_user.get().strip(),
             "password": self.txt_pass.get().strip(),
-            "port": self.txt_port.get().strip(),
+            "port": self.txt_port.get().strip()
+        }
+        salvar_config(cfg)
+
+    def salvar(self):
+        self.salvar_apenas_config_json()
+        
+        params_db = {
             "dir_encarte": self.txt_dir_encarte.get().strip(),
             "dir_csv": self.txt_dir_csv.get().strip(),
             "dir_jpg": self.txt_dir_jpg.get().strip(),
-            "path_logo": self.txt_logo.get().strip(),
-            "path_logo_whats": self.txt_logo_whats.get().strip()
+            "cabecalho_logo": self.txt_cabecalho_logo.get().strip(),
+            "rodape_logo_fone": self.txt_rodape_logo_fone.get().strip(),
+            "cabecalho_site": self.txt_cabecalho_site.get().strip(),
+            "cor_tit_rodape": self.txt_cor_tit_rodape.get().strip(),
+            "cor_grid_tarja": self.txt_cor_grid_tarja.get().strip(),
+            "cor_grid_preco": self.txt_cor_grid_preco.get().strip()
         }
-        salvar_config(cfg)
-        messagebox.showinfo("Sucesso", "Todos os parâmetros foram salvos!", parent=self)
-        self.destroy()
+        
+        try:
+            salvar_parametros_banco(params_db)
+            messagebox.showinfo("Sucesso", "Todos os parâmetros foram salvos com sucesso!", parent=self)
+            self.destroy()
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao salvar parâmetros na tabela do banco:\n{e}\n\nCertifique-se de que as tabelas já foram criadas.", parent=self)
 
 # ==============================================================================
 # JANELA MODAL DE PESQUISA DE PRODUTO
@@ -413,7 +594,6 @@ class FormEncarteWindow(ctk.CTkToplevel):
             self.txt_p_qtde.focus()
             return
 
-        # Validação de Duplicidade (vinculado a parent=self)
         for item in self.itens:
             if item['codigo_prod'] == cod_formatted and item['qtde_oferta'] == qtde_val:
                 messagebox.showwarning(
@@ -435,7 +615,6 @@ class FormEncarteWindow(ctk.CTkToplevel):
                 self.txt_p_preco.focus()
                 return
 
-        # Adiciona no INÍCIO da lista (Ordem Descendente)
         self.itens.insert(0, {
             'codigo_prod': cod_formatted, 
             'qtde_oferta': qtde_val, 
@@ -443,7 +622,6 @@ class FormEncarteWindow(ctk.CTkToplevel):
         })
         self.atualizar_grid()
 
-        # Limpa e foca no campo para inserção contínua
         self.txt_p_cod.delete(0, 'end')
         self.txt_p_qtde.delete(0, 'end')
         self.txt_p_qtde.insert(0, "1")
