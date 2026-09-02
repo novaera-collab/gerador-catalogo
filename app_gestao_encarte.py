@@ -275,18 +275,15 @@ class GerarEncarteModal(ctk.CTkToplevel):
     def processar_geracao(self):
         schema = get_schema()
         contato_sel = self.cmb_contato.get()
-        fone_sel = self.contatos_map.get(contato_sel, "")
 
         params = carregar_parametros_banco()
         dir_encarte = params.get("dir_encarte", "").strip()
-        dir_csv = params.get("dir_csv", "").strip()
+
+        # REDIRECIONADO TEMPORARIAMENTE PARA A PASTA DOWNLOADS LOCAL
+        dir_csv = os.path.join(os.path.expanduser("~"), "Downloads")
 
         if not dir_encarte or not os.path.exists(dir_encarte):
             messagebox.showerror("Erro de Configuração", "Diretório de encarte (dir_encarte) inválido ou não configurado nos Parâmetros.", parent=self)
-            return
-
-        if not dir_csv or not os.path.exists(dir_csv):
-            messagebox.showerror("Erro de Configuração", "Diretório do CSV (dir_csv) inválido ou não configurado nos Parâmetros.", parent=self)
             return
 
         path_sql = os.path.join(dir_encarte, "consulta_encarte.sql")
@@ -314,13 +311,14 @@ class GerarEncarteModal(ctk.CTkToplevel):
             linhas = cur.fetchall()
             conn.close()
 
-            path_out_csv = os.path.join(dir_csv, f"encarte_{self.encarte_id}.csv")
+            path_out_csv = os.path.normpath(os.path.join(dir_csv, f"encarte_{self.encarte_id}.csv"))
 
-            with open(path_out_csv, "w", encoding="win1252", errors="ignore") as f_csv:
+            # Alterado de win1252 para cp1252 (compatível com Windows/Excel)
+            with open(path_out_csv, "w", encoding="cp1252", errors="ignore") as f_csv:
                 for row in linhas:
                     f_csv.write(f"{row['linha_csv']}\n")
 
-            messagebox.showinfo("Sucesso", f"Arquivo de encarte gerado com sucesso!\n\nSalvo em: {path_out_csv}", parent=self)
+            messagebox.showinfo("Sucesso (Teste)", f"Arquivo gravado temporariamente em Downloads:\n\n{path_out_csv}", parent=self)
             self.destroy()
 
         except Exception as e:
