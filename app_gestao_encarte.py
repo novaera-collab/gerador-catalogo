@@ -295,7 +295,7 @@ class GerarEncarteModal(ctk.CTkToplevel):
             return
 
         # Filtro de Saldo
-        filtro_saldo_sql = "" if self.var_saldo.get() == "Todos" else "WHERE e.fsaldo > 0"
+        filtro_saldo_sql = "" if self.var_saldo.get() == "Todos" else "WHERE fsaldo > 0"
 
         try:
             with open(path_sql, "r", encoding="utf-8") as f:
