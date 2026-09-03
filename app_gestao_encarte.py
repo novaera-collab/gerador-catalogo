@@ -67,7 +67,7 @@ def salvar_config(cfg):
 
 def get_connection():
     cfg = carregar_config()
-    return psycopg2.connect(
+    conn = psycopg2.connect(
         host=cfg.get("host", "localhost"),
         database=cfg.get("database", "seu_banco"),
         user=cfg.get("user", "postgres"),
@@ -75,6 +75,9 @@ def get_connection():
         port=cfg.get("port", "5432"),
         cursor_factory=RealDictCursor
     )
+    # Define o encoding da sessão do client para compatibilidade total com o Postgres em LATIN1 / WIN1252
+    conn.set_client_encoding('WIN1252')
+    return conn
 
 def get_schema():
     cfg = carregar_config()
@@ -280,15 +283,21 @@ class GerarEncarteModal(ctk.CTkToplevel):
         filtro_saldo_sql = "" if self.var_saldo.get() == "Todos" else "WHERE fsaldo > 0"
 
         try:
-            with open(path_sql, "r", encoding="utf-8") as f:
-                sql_template = f.read()
+            # Carrega o SQL lendo em utf-8 ou cp1252 com fallback
+            try:
+                with open(path_sql, "r", encoding="utf-8") as f:
+                    sql_template = f.read()
+            except UnicodeDecodeError:
+                with open(path_sql, "r", encoding="cp1252") as f:
+                    sql_template = f.read()
 
             contato_sanitizado = contato_sel.replace("'", "''")
 
+            # Substituição correta das tags no SQL
             sql_final = sql_template.replace("{SCHEMA}", schema) \
                                     .replace("{ID_ENCARTE}", str(self.encarte_id)) \
                                     .replace("{TABELA_PRECO}", "1") \
-                                    .replace("{contato informado no momento da geraçao do catalogo}", f"'{contato_sanitizado}'") \
+                                    .replace("{CONTATO_SEL}", contato_sanitizado) \
                                     .replace("{FILTRO_SALDO}", filtro_saldo_sql)
 
             conn = get_connection()
@@ -299,11 +308,12 @@ class GerarEncarteModal(ctk.CTkToplevel):
 
             path_out_csv = os.path.normpath(os.path.join(dir_csv, f"encarte_{self.encarte_id}.csv"))
 
-            with open(path_out_csv, "w", encoding="cp1252", errors="ignore", newline="") as f_csv:
+            # Grava no formato CP1252 (ANSI/Latin1) com terminador de linha \r\n do Windows
+            with open(path_out_csv, "w", encoding="cp1252", errors="replace", newline="") as f_csv:
                 for row in linhas:
                     linha_texto = row.get('linha_csv')
                     if linha_texto is not None:
-                        f_csv.write(f"{str(linha_texto).strip()}\n")
+                        f_csv.write(f"{str(linha_texto).strip()}\r\n")
 
             messagebox.showinfo("Sucesso", f"Arquivo de encarte gerado com sucesso!\n\nSalvo em: {path_out_csv}", parent=self)
             self.destroy()
