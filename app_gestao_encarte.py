@@ -17,7 +17,7 @@ if sys.platform.startswith("win"):
 
 def mostrar_erro_fatal(exc_type, exc_value, exc_traceback):
     erro_msg = "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
-    messagebox.showerror("Erro Fatal na Inicialização", f"Ocorreu um erro ao abrir o app:\n\n{erro_msg}")
+    messagebox.showerror("Erro Fatal na InicializaÃ§Ã£o", f"Ocorreu um erro ao abrir o app:\n\n{erro_msg}")
 
 sys.excepthook = mostrar_erro_fatal
 
@@ -75,8 +75,8 @@ def get_connection():
         port=cfg.get("port", "5432"),
         cursor_factory=RealDictCursor
     )
-    # Define o encoding da sessão do client para compatibilidade total com o Postgres em LATIN1 / WIN1252
-    conn.set_client_encoding('WIN1252')
+    # Define o encoding do cliente aceito pelo PostgreSQL
+    conn.set_client_encoding('LATIN1')
     return conn
 
 def get_schema():
@@ -177,7 +177,7 @@ class NovoContatoModal(ctk.CTkToplevel):
         schema = get_schema()
 
         if not nome or not fone:
-            messagebox.showwarning("Atenção", "Informe o Nome e o Telefone.", parent=self)
+            messagebox.showwarning("AtenÃ§Ã£o", "Informe o Nome e o Telefone.", parent=self)
             return
 
         try:
@@ -268,16 +268,16 @@ class GerarEncarteModal(ctk.CTkToplevel):
         dir_csv = params.get("dir_csv", "").strip()
 
         if not dir_encarte or not os.path.exists(dir_encarte):
-            messagebox.showerror("Erro de Configuração", "Diretório de encarte (dir_encarte) inválido ou não configurado nos Parâmetros.", parent=self)
+            messagebox.showerror("Erro de ConfiguraÃ§Ã£o", "DiretÃ³rio de encarte (dir_encarte) invÃ¡lido ou nÃ£o configurado nos ParÃ¢metros.", parent=self)
             return
 
         if not dir_csv or not os.path.exists(dir_csv):
-            messagebox.showerror("Erro de Configuração", "Diretório do CSV (dir_csv) inválido ou não configurado nos Parâmetros.", parent=self)
+            messagebox.showerror("Erro de ConfiguraÃ§Ã£o", "DiretÃ³rio do CSV (dir_csv) invÃ¡lido ou nÃ£o configurado nos ParÃ¢metros.", parent=self)
             return
 
         path_sql = os.path.join(dir_encarte, "consulta_encarte.sql")
         if not os.path.exists(path_sql):
-            messagebox.showerror("Arquivo Ausente", f"O arquivo 'consulta_encarte.sql' não foi encontrado em:\n{dir_encarte}", parent=self)
+            messagebox.showerror("Arquivo Ausente", f"O arquivo 'consulta_encarte.sql' nÃ£o foi encontrado em:\n{dir_encarte}", parent=self)
             return
 
         filtro_saldo_sql = "" if self.var_saldo.get() == "Todos" else "WHERE fsaldo > 0"
@@ -293,7 +293,7 @@ class GerarEncarteModal(ctk.CTkToplevel):
 
             contato_sanitizado = contato_sel.replace("'", "''")
 
-            # Substituição correta das tags no SQL
+            # SubstituiÃ§Ã£o correta das tags no SQL
             sql_final = sql_template.replace("{SCHEMA}", schema) \
                                     .replace("{ID_ENCARTE}", str(self.encarte_id)) \
                                     .replace("{TABELA_PRECO}", "1") \
@@ -319,12 +319,12 @@ class GerarEncarteModal(ctk.CTkToplevel):
             self.destroy()
 
         except Exception as e:
-            messagebox.showerror("Erro na Geração", f"Falha ao executar consulta ou gerar arquivo:\n{e}", parent=self)
+            messagebox.showerror("Erro na GeraÃ§Ã£o", f"Falha ao executar consulta ou gerar arquivo:\n{e}", parent=self)
 
 class ParametrosWindow(ctk.CTkToplevel):
     def __init__(self, parent):
         super().__init__(parent)
-        self.title("Parâmetros do Sistema")
+        self.title("ParÃ¢metros do Sistema")
         self.geometry("640x620")
         self.grab_set()
 
@@ -334,8 +334,8 @@ class ParametrosWindow(ctk.CTkToplevel):
         tabview = ctk.CTkTabview(self)
         tabview.pack(fill="both", expand=True, padx=15, pady=10)
 
-        tab_banco = tabview.add("Conexão com Banco de Dados")
-        tab_dirs = tabview.add("Diretórios e Design")
+        tab_banco = tabview.add("ConexÃ£o com Banco de Dados")
+        tab_dirs = tabview.add("DiretÃ³rios e Design")
 
         ctk.CTkLabel(tab_banco, text="Host / IP:").grid(row=0, column=0, padx=10, pady=6, sticky="w")
         self.txt_host = ctk.CTkEntry(tab_banco, width=280)
@@ -352,7 +352,7 @@ class ParametrosWindow(ctk.CTkToplevel):
         self.txt_schema.insert(0, cfg.get("schema", "public"))
         self.txt_schema.grid(row=2, column=1, padx=10, pady=6)
 
-        ctk.CTkLabel(tab_banco, text="Usuário:").grid(row=3, column=0, padx=10, pady=6, sticky="w")
+        ctk.CTkLabel(tab_banco, text="UsuÃ¡rio:").grid(row=3, column=0, padx=10, pady=6, sticky="w")
         self.txt_user = ctk.CTkEntry(tab_banco, width=280)
         self.txt_user.insert(0, cfg.get("user", ""))
         self.txt_user.grid(row=3, column=1, padx=10, pady=6)
@@ -375,20 +375,20 @@ class ParametrosWindow(ctk.CTkToplevel):
         )
         btn_criar_tabelas.grid(row=6, column=0, columnspan=2, pady=20, padx=10, sticky="ew")
 
-        self.txt_dir_encarte = self._criar_campo_caminho(tab_dirs, "Diretório Executáveis:", 0, params_db.get("dir_encarte", ""), pasta=True)
-        self.txt_dir_csv = self._criar_campo_caminho(tab_dirs, "Diretório CSV:", 1, params_db.get("dir_csv", ""), pasta=True)
-        self.txt_dir_jpg = self._criar_campo_caminho(tab_dirs, "Diretório JPG:", 2, params_db.get("dir_jpg", ""), pasta=True)
+        self.txt_dir_encarte = self._criar_campo_caminho(tab_dirs, "DiretÃ³rio ExecutÃ¡veis:", 0, params_db.get("dir_encarte", ""), pasta=True)
+        self.txt_dir_csv = self._criar_campo_caminho(tab_dirs, "DiretÃ³rio CSV:", 1, params_db.get("dir_csv", ""), pasta=True)
+        self.txt_dir_jpg = self._criar_campo_caminho(tab_dirs, "DiretÃ³rio JPG:", 2, params_db.get("dir_jpg", ""), pasta=True)
         
-        self.txt_cabecalho_logo = self._criar_campo_caminho(tab_dirs, "Cabeçalho Logo:", 3, params_db.get("cabecalho_logo", ""), pasta=False)
-        self.txt_rodape_logo_fone = self._criar_campo_caminho(tab_dirs, "Rodapé Logo Fone:", 4, params_db.get("rodape_logo_fone", ""), pasta=False)
+        self.txt_cabecalho_logo = self._criar_campo_caminho(tab_dirs, "CabeÃ§alho Logo:", 3, params_db.get("cabecalho_logo", ""), pasta=False)
+        self.txt_rodape_logo_fone = self._criar_campo_caminho(tab_dirs, "RodapÃ© Logo Fone:", 4, params_db.get("rodape_logo_fone", ""), pasta=False)
 
-        ctk.CTkLabel(tab_dirs, text="Cabeçalho Site:").grid(row=5, column=0, padx=10, pady=6, sticky="w")
+        ctk.CTkLabel(tab_dirs, text="CabeÃ§alho Site:").grid(row=5, column=0, padx=10, pady=6, sticky="w")
         self.txt_cabecalho_site = ctk.CTkEntry(tab_dirs, width=240)
         self.txt_cabecalho_site.insert(0, params_db.get("cabecalho_site", ""))
         self.txt_cabecalho_site.grid(row=5, column=1, padx=5, pady=6)
 
-        ctk.CTkLabel(tab_dirs, text="Cor Título/Rodapé:").grid(row=6, column=0, padx=10, pady=6, sticky="w")
-        self.txt_cor_tit_rodape = ctk.CTkEntry(tab_dirs, width=240, placeholder_text="#HEX ou Código Cor")
+        ctk.CTkLabel(tab_dirs, text="Cor TÃ­tulo/RodapÃ©:").grid(row=6, column=0, padx=10, pady=6, sticky="w")
+        self.txt_cor_tit_rodape = ctk.CTkEntry(tab_dirs, width=240, placeholder_text="#HEX ou CÃ³digo Cor")
         self.txt_cor_tit_rodape.insert(0, params_db.get("cor_tit_rodape", ""))
         self.txt_cor_tit_rodape.grid(row=6, column=1, padx=5, pady=6)
 
@@ -397,7 +397,7 @@ class ParametrosWindow(ctk.CTkToplevel):
         self.txt_cor_grid_tarja.insert(0, params_db.get("cor_grid_tarja", ""))
         self.txt_cor_grid_tarja.grid(row=7, column=1, padx=5, pady=6)
 
-        ctk.CTkLabel(tab_dirs, text="Cor Grid Preço:").grid(row=8, column=0, padx=10, pady=6, sticky="w")
+        ctk.CTkLabel(tab_dirs, text="Cor Grid PreÃ§o:").grid(row=8, column=0, padx=10, pady=6, sticky="w")
         self.txt_cor_grid_preco = ctk.CTkEntry(tab_dirs, width=240)
         self.txt_cor_grid_preco.insert(0, params_db.get("cor_grid_preco", ""))
         self.txt_cor_grid_preco.grid(row=8, column=1, padx=5, pady=6)
@@ -495,7 +495,7 @@ class ParametrosWindow(ctk.CTkToplevel):
             conn.close()
             messagebox.showinfo("Sucesso", f"Tabelas criadas/verificadas com sucesso no schema '{schema}'!", parent=self)
         except Exception as e:
-            messagebox.showerror("Erro ao Criar Tabelas", f"Falha na execução do SQL:\n{e}", parent=self)
+            messagebox.showerror("Erro ao Criar Tabelas", f"Falha na execuÃ§Ã£o do SQL:\n{e}", parent=self)
 
     def salvar_apenas_config_json(self):
         cfg = {
@@ -525,10 +525,10 @@ class ParametrosWindow(ctk.CTkToplevel):
         
         try:
             salvar_parametros_banco(params_db)
-            messagebox.showinfo("Sucesso", "Todos os parâmetros foram salvos com sucesso!", parent=self)
+            messagebox.showinfo("Sucesso", "Todos os parÃ¢metros foram salvos com sucesso!", parent=self)
             self.destroy()
         except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao salvar parâmetros na tabela do banco:\n{e}", parent=self)
+            messagebox.showerror("Erro", f"Erro ao salvar parÃ¢metros na tabela do banco:\n{e}", parent=self)
 
 class PesquisaProdutoModal(ctk.CTkToplevel):
     def __init__(self, parent, callback_selecao):
@@ -544,7 +544,7 @@ class PesquisaProdutoModal(ctk.CTkToplevel):
         frame_busca.pack(fill="x", padx=15, pady=10)
 
         ctk.CTkLabel(frame_busca, text="Buscar Por:").pack(side="left", padx=5)
-        self.txt_busca = ctk.CTkEntry(frame_busca, width=320, placeholder_text="Digite o Código, Descrição ou Complemento...")
+        self.txt_busca = ctk.CTkEntry(frame_busca, width=320, placeholder_text="Digite o CÃ³digo, DescriÃ§Ã£o ou Complemento...")
         self.txt_busca.pack(side="left", padx=5)
         self.txt_busca.bind("<Return>", lambda e: self.pesquisar())
 
@@ -613,7 +613,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
         self.callback_refresh = callback_refresh
         self.itens = []
 
-        self.title("Alteração de Encarte" if encarte_id else "Novo Encarte")
+        self.title("AlteraÃ§Ã£o de Encarte" if encarte_id else "Novo Encarte")
         self.geometry("820x580")
         self.grab_set()
 
@@ -625,7 +625,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
         frame_top_bar = ctk.CTkFrame(self, fg_color="transparent")
         frame_top_bar.pack(fill="x", padx=15, pady=(8, 2))
 
-        lbl_titulo = ctk.CTkLabel(frame_top_bar, text="Manutenção do Encarte", font=ctk.CTkFont(size=18, weight="bold"))
+        lbl_titulo = ctk.CTkLabel(frame_top_bar, text="ManutenÃ§Ã£o do Encarte", font=ctk.CTkFont(size=18, weight="bold"))
         lbl_titulo.pack(side="left")
 
         btn_voltar = ctk.CTkButton(frame_top_bar, text="Voltar", width=80, height=28, fg_color="#455A64", command=self.destroy)
@@ -634,11 +634,11 @@ class FormEncarteWindow(ctk.CTkToplevel):
         frame_head = ctk.CTkFrame(self)
         frame_head.pack(fill="x", padx=15, pady=5)
 
-        ctk.CTkLabel(frame_head, text="Título:").grid(row=0, column=0, padx=8, pady=4, sticky="w")
+        ctk.CTkLabel(frame_head, text="TÃ­tulo:").grid(row=0, column=0, padx=8, pady=4, sticky="w")
         self.txt_titulo = ctk.CTkEntry(frame_head, width=380, placeholder_text="Ex: ENCARTE FARMAX")
         self.txt_titulo.grid(row=0, column=1, columnspan=3, padx=8, pady=4, sticky="w")
 
-        ctk.CTkLabel(frame_head, text="Data Início:").grid(row=1, column=0, padx=8, pady=4, sticky="w")
+        ctk.CTkLabel(frame_head, text="Data InÃ­cio:").grid(row=1, column=0, padx=8, pady=4, sticky="w")
         self.txt_dt_ini = ctk.CTkEntry(frame_head, width=110, placeholder_text="29/08/2026")
         self.txt_dt_ini.grid(row=1, column=1, padx=(8, 2), pady=4, sticky="w")
         btn_cal_ini = ctk.CTkButton(frame_head, text="Cal", width=35, height=26, command=lambda: self.abrir_calendario(self.txt_dt_ini))
@@ -653,7 +653,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
         frame_prod = ctk.CTkFrame(self)
         frame_prod.pack(fill="x", padx=15, pady=5)
 
-        ctk.CTkLabel(frame_prod, text="Cód. Prod:").grid(row=0, column=0, padx=4, pady=4)
+        ctk.CTkLabel(frame_prod, text="CÃ³d. Prod:").grid(row=0, column=0, padx=4, pady=4)
         
         self.txt_p_cod = ctk.CTkEntry(frame_prod, width=75, placeholder_text="00001")
         self.txt_p_cod.grid(row=0, column=1, padx=(4, 2), pady=4)
@@ -729,7 +729,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
         preco_raw = self.txt_p_preco.get().strip().replace(',', '.')
 
         if not cod_raw:
-            messagebox.showwarning("Atenção", "Informe o Código do Produto.", parent=self)
+            messagebox.showwarning("AtenÃ§Ã£o", "Informe o CÃ³digo do Produto.", parent=self)
             self.txt_p_cod.focus()
             return
 
@@ -740,7 +740,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
             if qtde_val <= 0:
                 qtde_val = 1.0
         except ValueError:
-            messagebox.showerror("Erro", "Quantidade inválida.", parent=self)
+            messagebox.showerror("Erro", "Quantidade invÃ¡lida.", parent=self)
             self.txt_p_qtde.focus()
             return
 
@@ -748,7 +748,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
             if item['codigo_prod'] == cod_formatted and item['qtde_oferta'] == qtde_val:
                 messagebox.showwarning(
                     "Produto Duplicado",
-                    f"O produto {cod_formatted} já está cadastrado com a quantidade {qtde_val:.2f}.\n\n"
+                    f"O produto {cod_formatted} jÃ¡ estÃ¡ cadastrado com a quantidade {qtde_val:.2f}.\n\n"
                     "Para incluir o mesmo produto, as quantidades precisam ser diferentes.",
                     parent=self
                 )
@@ -761,7 +761,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
             try:
                 preco_val = float(preco_raw)
             except ValueError:
-                messagebox.showerror("Erro", "Valor de preço inválido.", parent=self)
+                messagebox.showerror("Erro", "Valor de preÃ§o invÃ¡lido.", parent=self)
                 self.txt_p_preco.focus()
                 return
 
@@ -802,12 +802,12 @@ class FormEncarteWindow(ctk.CTkToplevel):
 
             num_exibicao = total_itens - idx
             ctk.CTkLabel(f_row, text=f"#{num_exibicao}", width=40).pack(side="left", padx=5)
-            ctk.CTkLabel(f_row, text=f"Código: {item['codigo_prod']}", width=140, anchor="w", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=5)
+            ctk.CTkLabel(f_row, text=f"CÃ³digo: {item['codigo_prod']}", width=140, anchor="w", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=5)
             
             qtde_str = f"{item['qtde_oferta']:.2f}".rstrip('0').rstrip('.')
             ctk.CTkLabel(f_row, text=f"A partir de {qtde_str} un.", width=140, anchor="w", text_color="#81D4FA").pack(side="left", padx=5)
 
-            lbl_preco = f"R$ {item['preco_oferta']:.2f}" if item['preco_oferta'] > 0 else "Preço Atual (R$ 0.00)"
+            lbl_preco = f"R$ {item['preco_oferta']:.2f}" if item['preco_oferta'] > 0 else "PreÃ§o Atual (R$ 0.00)"
             ctk.CTkLabel(f_row, text=lbl_preco, width=160, text_color="#A5D6A7" if item['preco_oferta'] > 0 else "#FFB74D", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=5)
 
             btn_del = ctk.CTkButton(f_row, text="X", width=30, height=26, fg_color="#D32F2F", command=lambda i=idx: self.remover_item(i))
@@ -865,14 +865,14 @@ class FormEncarteWindow(ctk.CTkToplevel):
         dt_fim_raw = self.txt_dt_fim.get().strip()
 
         if not titulo or not dt_ini_raw or not dt_fim_raw or not self.itens:
-            messagebox.showwarning("Atenção", "Preencha o cabeçalho e insira ao menos 1 produto.", parent=self)
+            messagebox.showwarning("AtenÃ§Ã£o", "Preencha o cabeÃ§alho e insira ao menos 1 produto.", parent=self)
             return
 
         try:
             dt_ini_iso = self.parse_data_para_iso(dt_ini_raw)
             dt_fim_iso = self.parse_data_para_iso(dt_fim_raw)
         except Exception:
-            messagebox.showerror("Data Inválida", "Informe a data no padrão brasileiro DD/MM/AAAA (ex: 29/08/2026).", parent=self)
+            messagebox.showerror("Data InvÃ¡lida", "Informe a data no padrÃ£o brasileiro DD/MM/AAAA (ex: 29/08/2026).", parent=self)
             return
 
         conn = None
@@ -924,12 +924,12 @@ class FormEncarteWindow(ctk.CTkToplevel):
             if conn:
                 conn.rollback()
                 conn.close()
-            messagebox.showerror("Erro ao Salvar", f"Falha na transação:\n{e}", parent=self)
+            messagebox.showerror("Erro ao Salvar", f"Falha na transaÃ§Ã£o:\n{e}", parent=self)
 
 class AppPrincipal(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Gestão de Encartes - v2.0")
+        self.title("GestÃ£o de Encartes - v2.0")
         self.geometry("820x520")
 
         frame_topo = ctk.CTkFrame(self)
@@ -940,7 +940,7 @@ class AppPrincipal(ctk.CTk):
         btn_sair = ctk.CTkButton(frame_topo, text="Sair", fg_color="#C62828", width=80, command=self.destroy)
         btn_sair.pack(side="right", padx=5, pady=5)
 
-        btn_params = ctk.CTkButton(frame_topo, text="Parâmetros", fg_color="#455A64", width=110, command=self.abrir_parametros)
+        btn_params = ctk.CTkButton(frame_topo, text="ParÃ¢metros", fg_color="#455A64", width=110, command=self.abrir_parametros)
         btn_params.pack(side="right", padx=5, pady=5)
 
         btn_novo = ctk.CTkButton(frame_topo, text="Novo Encarte", fg_color="#2E7D32", width=120, command=self.novo_encarte)
@@ -950,7 +950,7 @@ class AppPrincipal(ctk.CTk):
         frame_pesquisa.pack(fill="x", padx=15, pady=5)
 
         ctk.CTkLabel(frame_pesquisa, text="Buscar Encarte:").pack(side="left", padx=10)
-        self.txt_filtro_titulo = ctk.CTkEntry(frame_pesquisa, placeholder_text="Digite o título para filtrar...")
+        self.txt_filtro_titulo = ctk.CTkEntry(frame_pesquisa, placeholder_text="Digite o tÃ­tulo para filtrar...")
         self.txt_filtro_titulo.pack(side="left", fill="x", expand=True, padx=5, pady=5)
         self.txt_filtro_titulo.bind("<KeyRelease>", lambda e: self.carregar_encartes())
 
@@ -1036,8 +1036,8 @@ class AppPrincipal(ctk.CTk):
     def excluir_encarte(self, encarte_id, titulo):
         schema = get_schema()
         resposta = messagebox.askyesno(
-            "Confirmar Exclusão", 
-            f"Tem certeza que deseja excluir o encarte #{encarte_id} - '{titulo}'?\n\nEsta ação não poderá ser desfeita!",
+            "Confirmar ExclusÃ£o", 
+            f"Tem certeza que deseja excluir o encarte #{encarte_id} - '{titulo}'?\n\nEsta aÃ§Ã£o nÃ£o poderÃ¡ ser desfeita!",
             parent=self
         )
         if resposta:
@@ -1051,7 +1051,7 @@ class AppPrincipal(ctk.CTk):
                 conn.commit()
                 conn.close()
                 
-                messagebox.showinfo("Sucesso", "Encarte excluído com sucesso!", parent=self)
+                messagebox.showinfo("Sucesso", "Encarte excluÃ­do com sucesso!", parent=self)
                 self.carregar_encartes()
             except Exception as e:
                 messagebox.showerror("Erro ao Excluir", f"Ocorreu um erro ao excluir o encarte:\n{e}", parent=self)
