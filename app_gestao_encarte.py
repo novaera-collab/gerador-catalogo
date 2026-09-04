@@ -4,6 +4,7 @@ import os
 import json
 import traceback
 import base64
+import subprocess
 import customtkinter as ctk
 from datetime import datetime, date
 from tkinter import messagebox, Toplevel, filedialog
@@ -75,7 +76,6 @@ def get_connection():
         port=cfg.get("port", "5432"),
         cursor_factory=RealDictCursor
     )
-    # Define o encoding do cliente aceito pelo PostgreSQL
     conn.set_client_encoding('LATIN1')
     return conn
 
@@ -199,13 +199,14 @@ class GerarEncarteModal(ctk.CTkToplevel):
         self.encarte_titulo = encarte_titulo
 
         self.title(f"Gerar Encarte #{encarte_id}")
-        self.geometry("460x280")
+        self.geometry("460x340")
         self.grab_set()
 
         self.contatos_map = {}
 
         ctk.CTkLabel(self, text=f"Gerar Encarte: {encarte_titulo}", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=(15, 10))
 
+        # Contato
         frame_ct = ctk.CTkFrame(self, fg_color="transparent")
         frame_ct.pack(fill="x", padx=20, pady=5)
 
@@ -216,17 +217,27 @@ class GerarEncarteModal(ctk.CTkToplevel):
         btn_novo_contato = ctk.CTkButton(frame_ct, text="+ Novo", width=60, fg_color="#1976D2", command=self.abrir_novo_contato)
         btn_novo_contato.grid(row=0, column=2, padx=5)
 
+        # Tabela de Preço (1, 2 ou 3)
+        frame_tb = ctk.CTkFrame(self, fg_color="transparent")
+        frame_tb.pack(fill="x", padx=20, pady=5)
+
+        ctk.CTkLabel(frame_tb, text="Tabela de Preço:").grid(row=0, column=0, sticky="w", padx=5)
+        self.cmb_tabela = ctk.CTkComboBox(frame_tb, width=120, values=["1", "2", "3"])
+        self.cmb_tabela.set("1")
+        self.cmb_tabela.grid(row=0, column=1, sticky="w", padx=5)
+
+        # Saldo (Default: Positivos)
         frame_sd = ctk.CTkFrame(self, fg_color="transparent")
         frame_sd.pack(fill="x", padx=20, pady=10)
 
         ctk.CTkLabel(frame_sd, text="Saldo:").grid(row=0, column=0, sticky="w", padx=5)
-        self.var_saldo = ctk.StringVar(value="Todos")
+        self.var_saldo = ctk.StringVar(value="Positivos")
         rb_todos = ctk.CTkRadioButton(frame_sd, text="Todos", variable=self.var_saldo, value="Todos")
         rb_todos.grid(row=0, column=1, padx=15)
         rb_pos = ctk.CTkRadioButton(frame_sd, text="Positivos", variable=self.var_saldo, value="Positivos")
         rb_pos.grid(row=0, column=2, padx=15)
 
-        btn_gerar = ctk.CTkButton(self, text="Confirmar e Gerar CSV", fg_color="#1B5E20", font=ctk.CTkFont(weight="bold"), height=35, command=self.processar_geracao)
+        btn_gerar = ctk.CTkButton(self, text="Confirmar e Gerar Encarte", fg_color="#1B5E20", font=ctk.CTkFont(weight="bold"), height=35, command=self.processar_geracao)
         btn_gerar.pack(pady=20)
 
         self.carregar_contatos()
@@ -262,17 +273,23 @@ class GerarEncarteModal(ctk.CTkToplevel):
     def processar_geracao(self):
         schema = get_schema()
         contato_sel = self.cmb_contato.get()
+        tabela_sel = self.cmb_tabela.get()
 
         params = carregar_parametros_banco()
         dir_encarte = params.get("dir_encarte", "").strip()
         dir_csv = params.get("dir_csv", "").strip()
+        dir_jpg = params.get("dir_jpg", "").strip()
 
         if not dir_encarte or not os.path.exists(dir_encarte):
-            messagebox.showerror("Erro de Configuração", "Diretório de encarte (dir_encarte) inválido ou não configurado nos Parâmetros.", parent=self)
+            messagebox.showerror("Erro de Configuração", "Diretório Executáveis/Encarte (dir_encarte) inválido.", parent=self)
             return
 
         if not dir_csv or not os.path.exists(dir_csv):
-            messagebox.showerror("Erro de Configuração", "Diretório do CSV (dir_csv) inválido ou não configurado nos Parâmetros.", parent=self)
+            messagebox.showerror("Erro de Configuração", "Diretório do CSV (dir_csv) inválido.", parent=self)
+            return
+
+        if not dir_jpg or not os.path.exists(dir_jpg):
+            messagebox.showerror("Erro de Configuração", "Diretório de JPG (dir_jpg) inválido.", parent=self)
             return
 
         path_sql = os.path.join(dir_encarte, "consulta_encarte.sql")
@@ -294,7 +311,7 @@ class GerarEncarteModal(ctk.CTkToplevel):
 
             sql_final = sql_template.replace("{SCHEMA}", schema) \
                                     .replace("{ID_ENCARTE}", str(self.encarte_id)) \
-                                    .replace("{TABELA_PRECO}", "1") \
+                                    .replace("{TABELA_PRECO}", tabela_sel) \
                                     .replace("{CONTATO_SEL}", contato_sanitizado) \
                                     .replace("{FILTRO_SALDO}", filtro_saldo_sql)
 
@@ -304,16 +321,28 @@ class GerarEncarteModal(ctk.CTkToplevel):
             linhas = cur.fetchall()
             conn.close()
 
-            path_out_csv = os.path.normpath(os.path.join(dir_csv, f"encarte_{self.encarte_id}.csv"))
+            # Nome do CSV: Id_encarte.csv (ex: 7.csv)
+            path_out_csv = os.path.normpath(os.path.join(dir_csv, f"{self.encarte_id}.csv"))
+            path_out_jpg = os.path.normpath(os.path.join(dir_jpg, f"{self.encarte_id}.jpg"))
 
-            # Grava no formato UTF-8-SIG (com BOM) para o Excel/Leitor reconhecer os caracteres corretamente
             with open(path_out_csv, "w", encoding="utf-8-sig", errors="replace", newline="") as f_csv:
                 for row in linhas:
                     linha_texto = row.get('linha_csv')
                     if linha_texto is not None:
                         f_csv.write(f"{str(linha_texto).strip()}\r\n")
 
-            messagebox.showinfo("Sucesso", f"Arquivo de encarte gerado com sucesso!\n\nSalvo em: {path_out_csv}", parent=self)
+            # Caminhos dos executáveis
+            exe_gerar = os.path.join(dir_encarte, "gerar_encarte.exe")
+            exe_viewer = os.path.join(dir_encarte, "visualizador.exe")
+
+            # Chamada dos executáveis parametrizados
+            if os.path.exists(exe_gerar):
+                subprocess.run([exe_gerar, path_out_csv, path_out_jpg], check=False)
+            
+            if os.path.exists(exe_viewer):
+                subprocess.Popen([exe_viewer, path_out_jpg])
+
+            messagebox.showinfo("Sucesso", f"Encarte gerado com sucesso!\n\nCSV: {path_out_csv}\nJPG: {path_out_jpg}", parent=self)
             self.destroy()
 
         except Exception as e:
@@ -928,7 +957,8 @@ class AppPrincipal(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Gestão de Encartes - v2.0")
-        self.geometry("820x520")
+        # Aumentado o tamanho da janela principal
+        self.geometry("850x600")
 
         frame_topo = ctk.CTkFrame(self)
         frame_topo.pack(fill="x", padx=15, pady=(10, 5))
@@ -989,7 +1019,7 @@ class AppPrincipal(ctk.CTk):
 
             for enc in encartes:
                 row = ctk.CTkFrame(self.frame_lista)
-                row.pack(fill="x", pady=4, padx=5)
+                row.pack(fill="x", pady=6, padx=5)
 
                 dt_ini_obj = enc['data_inicio']
                 dt_fim_obj = enc['data_fim']
@@ -1005,28 +1035,36 @@ class AppPrincipal(ctk.CTk):
                     except Exception:
                         data_vencimento = hoje
 
-                cor_status = "#EF5350" if data_vencimento < hoje else "#66BB6A"
+                vencido = data_vencimento < hoje
+                cor_status = "#EF5350" if vencido else "#66BB6A"
 
-                lbl_info = f"#{enc['id']} - {enc['titulo']} ({dt_ini_str} a {dt_fim_str})"
-                ctk.CTkLabel(row, text=lbl_info, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=cor_status).pack(side="left", padx=10, fill="x", expand=True)
+                # Lado Esquerdo: Informações do Encarte
+                lbl_info = f"#{enc['id']} - {enc['titulo']}\nPeríodo: {dt_ini_str} a {dt_fim_str}"
+                ctk.CTkLabel(row, text=lbl_info, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=cor_status, justify="left").pack(side="left", padx=15, pady=8, fill="x", expand=True)
 
-                btn_excluir = ctk.CTkButton(
-                    row, text="Excluir", width=65, fg_color="#C62828", hover_color="#B71C1C",
-                    command=lambda e_id=enc['id'], e_tit=enc['titulo']: self.excluir_encarte(e_id, e_tit)
-                )
-                btn_excluir.pack(side="right", padx=(2, 5), pady=5)
+                # Lado Direito: Ações dispostas uma embaixo da outra
+                frame_acoes = ctk.CTkFrame(row, fg_color="transparent")
+                frame_acoes.pack(side="right", padx=10, pady=5)
+
+                # Oculta opção de gerar encarte se estiver vencido
+                if not vencido:
+                    btn_gerar = ctk.CTkButton(
+                        frame_acoes, text="Gerar Encarte", width=110, height=26, fg_color="#2E7D32", hover_color="#1B5E20",
+                        command=lambda e_id=enc['id'], e_tit=enc['titulo']: self.gerar_encarte(e_id, e_tit)
+                    )
+                    btn_gerar.pack(pady=2)
 
                 btn_editar = ctk.CTkButton(
-                    row, text="Editar", width=65, 
+                    frame_acoes, text="Editar", width=110, height=26,
                     command=lambda e_id=enc['id']: self.editar_encarte(e_id)
                 )
-                btn_editar.pack(side="right", padx=2, pady=5)
+                btn_editar.pack(pady=2)
 
-                btn_gerar = ctk.CTkButton(
-                    row, text="Gerar Encarte", width=100, fg_color="#2E7D32", hover_color="#1B5E20",
-                    command=lambda e_id=enc['id'], e_tit=enc['titulo']: self.gerar_encarte(e_id, e_tit)
+                btn_excluir = ctk.CTkButton(
+                    frame_acoes, text="Excluir", width=110, height=26, fg_color="#C62828", hover_color="#B71C1C",
+                    command=lambda e_id=enc['id'], e_tit=enc['titulo']: self.excluir_encarte(e_id, e_tit)
                 )
-                btn_gerar.pack(side="right", padx=2, pady=5)
+                btn_excluir.pack(pady=2)
 
         except Exception as e:
             ctk.CTkLabel(self.frame_lista, text=f"Erro ao consultar o banco de dados:\n{e}", text_color="#EF5350").pack(pady=20)
