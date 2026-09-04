@@ -322,14 +322,14 @@ class GerarEncarteModal(ctk.CTkToplevel):
             linhas = cur.fetchall()
             conn.close()
 
-            # Sanitiza o nome do contato removendo caracteres especiais para salvar o arquivo de forma segura
+            # Sanitiza o nome do contato para o arquivo CSV
             nome_contato_limpo = re.sub(r'[^\w\s-]', '', contato_sel).strip().replace(" ", "_")
             if not nome_contato_limpo:
                 nome_contato_limpo = "geral"
 
-            # Nome dos arquivos CSV e JPG ajustados com o ID do encarte + Nome do contato
+            # Nome dos arquivos CSV e JPG ajustados dinamicamente
             nome_arquivo_csv = f"{self.encarte_id}_encarte_{nome_contato_limpo}.csv"
-            nome_arquivo_jpg = f"{self.encarte_id}_{nome_contato_limpo}.jpg"
+            nome_arquivo_jpg = f"{self.encarte_id}_DADOS_CATALOGO.jpg"
 
             path_out_csv = os.path.normpath(os.path.join(dir_csv, nome_arquivo_csv))
             path_out_jpg = os.path.normpath(os.path.join(dir_jpg, nome_arquivo_jpg))
@@ -340,16 +340,20 @@ class GerarEncarteModal(ctk.CTkToplevel):
                     if linha_texto is not None:
                         f_csv.write(f"{str(linha_texto).strip()}\r\n")
 
-            # Caminhos dos executáveis
-            exe_gerar = os.path.join(dir_encarte, "gerar_encarte.exe")
-            exe_viewer = os.path.join(dir_encarte, "visualizador.exe")
+            # Executáveis conforme cadastrados/existentes no diretório de parâmetros
+            exe_gerar = os.path.join(dir_encarte, "gerar_catalogo.exe")
+            exe_viewer = os.path.join(dir_encarte, "visualizar_catalogo.exe")
 
             # Chamada dos executáveis parametrizados
             if os.path.exists(exe_gerar):
                 subprocess.run([exe_gerar, path_out_csv, path_out_jpg], check=False)
-            
+            else:
+                messagebox.showwarning("Aviso", f"Executável 'gerar_catalogo.exe' não encontrado em:\n{exe_gerar}", parent=self)
+
             if os.path.exists(exe_viewer):
                 subprocess.Popen([exe_viewer, path_out_jpg])
+            else:
+                messagebox.showwarning("Aviso", f"Visualizador 'visualizar_catalogo.exe' não encontrado em:\n{exe_viewer}", parent=self)
 
             messagebox.showinfo("Sucesso", f"Encarte gerado com sucesso!\n\nCSV: {path_out_csv}\nJPG: {path_out_jpg}", parent=self)
             self.destroy()
