@@ -327,10 +327,12 @@ class GerarEncarteModal(ctk.CTkToplevel):
             if not nome_contato_limpo:
                 nome_contato_limpo = "geral"
 
-            # Nome do arquivo CSV alterado para id_encarte_(nome do contato).csv
+            # Nome dos arquivos CSV e JPG ajustados com o ID do encarte + Nome do contato
             nome_arquivo_csv = f"{self.encarte_id}_encarte_{nome_contato_limpo}.csv"
+            nome_arquivo_jpg = f"{self.encarte_id}_{nome_contato_limpo}.jpg"
+
             path_out_csv = os.path.normpath(os.path.join(dir_csv, nome_arquivo_csv))
-            path_out_jpg = os.path.normpath(os.path.join(dir_jpg, f"{self.encarte_id}.jpg"))
+            path_out_jpg = os.path.normpath(os.path.join(dir_jpg, nome_arquivo_jpg))
 
             with open(path_out_csv, "w", encoding="utf-8-sig", errors="replace", newline="") as f_csv:
                 for row in linhas:
