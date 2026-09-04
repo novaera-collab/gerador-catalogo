@@ -2,6 +2,7 @@
 import sys
 import os
 import json
+import re
 import traceback
 import base64
 import subprocess
@@ -276,20 +277,20 @@ class GerarEncarteModal(ctk.CTkToplevel):
         tabela_sel = self.cmb_tabela.get()
 
         params = carregar_parametros_banco()
-        dir_encarte = params.get("dir_encarte", "").strip()
-        dir_csv = params.get("dir_csv", "").strip()
-        dir_jpg = params.get("dir_jpg", "").strip()
+        dir_encarte = os.path.abspath(os.path.expanduser(os.path.expandvars(params.get("dir_encarte", "").strip())))
+        dir_csv = os.path.abspath(os.path.expanduser(os.path.expandvars(params.get("dir_csv", "").strip())))
+        dir_jpg = os.path.abspath(os.path.expanduser(os.path.expandvars(params.get("dir_jpg", "").strip())))
 
         if not dir_encarte or not os.path.exists(dir_encarte):
-            messagebox.showerror("Erro de Configuração", "Diretório Executáveis/Encarte (dir_encarte) inválido.", parent=self)
+            messagebox.showerror("Erro de Configuração", f"Diretório Executáveis/Encarte (dir_encarte) inválido:\n{dir_encarte}", parent=self)
             return
 
         if not dir_csv or not os.path.exists(dir_csv):
-            messagebox.showerror("Erro de Configuração", "Diretório do CSV (dir_csv) inválido.", parent=self)
+            messagebox.showerror("Erro de Configuração", f"Diretório do CSV (dir_csv) inválido:\n{dir_csv}", parent=self)
             return
 
         if not dir_jpg or not os.path.exists(dir_jpg):
-            messagebox.showerror("Erro de Configuração", "Diretório de JPG (dir_jpg) inválido.", parent=self)
+            messagebox.showerror("Erro de Configuração", f"Diretório de JPG (dir_jpg) inválido:\n{dir_jpg}", parent=self)
             return
 
         path_sql = os.path.join(dir_encarte, "consulta_encarte.sql")
@@ -321,8 +322,14 @@ class GerarEncarteModal(ctk.CTkToplevel):
             linhas = cur.fetchall()
             conn.close()
 
-            # Nome do CSV: Id_encarte.csv (ex: 7.csv)
-            path_out_csv = os.path.normpath(os.path.join(dir_csv, f"{self.encarte_id}.csv"))
+            # Sanitiza o nome do contato removendo caracteres especiais para salvar o arquivo de forma segura
+            nome_contato_limpo = re.sub(r'[^\w\s-]', '', contato_sel).strip().replace(" ", "_")
+            if not nome_contato_limpo:
+                nome_contato_limpo = "geral"
+
+            # Nome do arquivo CSV alterado para id_encarte_(nome do contato).csv
+            nome_arquivo_csv = f"{self.encarte_id}_encarte_{nome_contato_limpo}.csv"
+            path_out_csv = os.path.normpath(os.path.join(dir_csv, nome_arquivo_csv))
             path_out_jpg = os.path.normpath(os.path.join(dir_jpg, f"{self.encarte_id}.jpg"))
 
             with open(path_out_csv, "w", encoding="utf-8-sig", errors="replace", newline="") as f_csv:
@@ -957,7 +964,6 @@ class AppPrincipal(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Gestão de Encartes - v2.0")
-        # Aumentado o tamanho da janela principal
         self.geometry("850x600")
 
         frame_topo = ctk.CTkFrame(self)
@@ -1038,15 +1044,12 @@ class AppPrincipal(ctk.CTk):
                 vencido = data_vencimento < hoje
                 cor_status = "#EF5350" if vencido else "#66BB6A"
 
-                # Lado Esquerdo: Informações do Encarte
                 lbl_info = f"#{enc['id']} - {enc['titulo']}\nPeríodo: {dt_ini_str} a {dt_fim_str}"
                 ctk.CTkLabel(row, text=lbl_info, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=cor_status, justify="left").pack(side="left", padx=15, pady=8, fill="x", expand=True)
 
-                # Lado Direito: Ações dispostas uma embaixo da outra
                 frame_acoes = ctk.CTkFrame(row, fg_color="transparent")
                 frame_acoes.pack(side="right", padx=10, pady=5)
 
-                # Oculta opção de gerar encarte se estiver vencido
                 if not vencido:
                     btn_gerar = ctk.CTkButton(
                         frame_acoes, text="Gerar Encarte", width=110, height=26, fg_color="#2E7D32", hover_color="#1B5E20",
