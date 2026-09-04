@@ -78,11 +78,10 @@ def renderizar_paginas_jpg(config, produtos, caminho_saida_base):
         font_cod_bold      = ImageFont.truetype("arialbd.ttf", 20)
         font_desc_bold     = ImageFont.truetype("arialbd.ttf", 22)
         font_marca         = ImageFont.truetype("arialbd.ttf", 18)
-        font_preco_bold    = ImageFont.truetype("arialbd.ttf", 38)
         font_rod_destaque  = ImageFont.truetype("arialbd.ttf", 26)
         font_rod_validade  = ImageFont.truetype("arial.ttf", 18)
     except IOError:
-        font_titulo_bold = font_sub_regular = font_cod_bold = font_desc_bold = font_marca = font_preco_bold = font_rod_validade = ImageFont.load_default()
+        font_titulo_bold = font_sub_regular = font_cod_bold = font_desc_bold = font_marca = font_rod_validade = ImageFont.load_default()
 
     total_produtos = len(produtos)
     total_paginas = (total_produtos + PRODUTOS_POR_PAGINA - 1) // PRODUTOS_POR_PAGINA if total_produtos > 0 else 1
@@ -166,20 +165,54 @@ def renderizar_paginas_jpg(config, produtos, caminho_saida_base):
             tarja_x2, tarja_y2 = x + largura_card - 12, y + 448
             draw.rectangle([tarja_x1, tarja_y1, tarja_x2, tarja_y2], fill=cor_tarja_bg)
 
-            try:
-                preco_val = float(str(prod.get('preco', 0)).replace(',', '.'))
-            except ValueError:
-                preco_val = 0.0
-            preco_fmt = f"R$ {preco_val:.2f}".replace('.', ',')
+            # --- TRATAMENTO PARA RECEBER TEXTO NO PREÇO ---
+            texto_preco = str(prod.get('preco', '')).strip()
 
-            bbox_p = draw.textbbox((0, 0), preco_fmt, font=font_preco_bold)
+            # Ajusta o tamanho da fonte dinamicamente de acordo com o tamanho do texto
+            tamanho_fonte_preco = 36
+            if len(texto_preco) > 25:
+                tamanho_fonte_preco = 18
+            elif len(texto_preco) > 18:
+                tamanho_fonte_preco = 22
+            elif len(texto_preco) > 12:
+                tamanho_fonte_preco = 28
+
+            try:
+                font_preco_dinamica = ImageFont.truetype("arialbd.ttf", tamanho_fonte_preco)
+            except IOError:
+                font_preco_dinamica = ImageFont.load_default()
+
+            largura_tarja = tarja_x2 - tarja_x1
+            altura_tarja = tarja_y2 - tarja_y1
+
+            bbox_p = draw.textbbox((0, 0), texto_preco, font=font_preco_dinamica)
             largura_p = bbox_p[2] - bbox_p[0]
             altura_p = bbox_p[3] - bbox_p[1]
 
-            x_preco = tarja_x1 + ((tarja_x2 - tarja_x1) - largura_p) // 2
-            y_preco = tarja_y1 + ((tarja_y2 - tarja_y1) - altura_p) // 2 - 4
+            # Se o texto ultrapassar a largura da tarja, quebra em 2 linhas
+            if largura_p > (largura_tarja - 10) and " " in texto_preco:
+                palavras = texto_preco.split(" ")
+                meio = len(palavras) // 2
+                linha1 = " ".join(palavras[:meio])
+                linha2 = " ".join(palavras[meio:])
 
-            draw.text((x_preco, y_preco), preco_fmt, fill=cor_preco_texto, font=font_preco_bold)
+                bbox_l1 = draw.textbbox((0, 0), linha1, font=font_preco_dinamica)
+                bbox_l2 = draw.textbbox((0, 0), linha2, font=font_preco_dinamica)
+
+                w1, h1 = bbox_l1[2] - bbox_l1[0], bbox_l1[3] - bbox_l1[1]
+                w2, h2 = bbox_l2[2] - bbox_l2[0], bbox_l2[3] - bbox_l2[1]
+
+                x_l1 = tarja_x1 + (largura_tarja - w1) // 2
+                x_l2 = tarja_x1 + (largura_tarja - w2) // 2
+
+                y_inicial = tarja_y1 + (altura_tarja - (h1 + h2 + 6)) // 2
+
+                draw.text((x_l1, y_inicial - 2), linha1, fill=cor_preco_texto, font=font_preco_dinamica)
+                draw.text((x_l2, y_inicial + h1 + 4), linha2, fill=cor_preco_texto, font=font_preco_dinamica)
+            else:
+                x_preco = tarja_x1 + (largura_tarja - largura_p) // 2
+                y_preco = tarja_y1 + (altura_tarja - altura_p) // 2 - 4
+                draw.text((x_preco, y_preco), texto_preco, fill=cor_preco_texto, font=font_preco_dinamica)
 
         # 3. RODAPÉ
         y_rodape = ALTURA_TOTAL - ALTURA_RODAPE
@@ -230,7 +263,7 @@ def renderizar_paginas_jpg(config, produtos, caminho_saida_base):
         else:
             caminho_final_jpg = f"{nome_base}{ext}"
 
-        # Salva apenas a imagem JPG gerada
+        # Salva a imagem JPG gerada
         img.save(caminho_final_jpg, format="JPEG", quality=98)
 
 if __name__ == "__main__":
