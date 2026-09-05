@@ -30,7 +30,6 @@ def carregar_e_ajustar_imagem(caminho, largura_max, altura_max):
         return None
 
 def limpar_jpgs_antigos(caminho_saida_base):
-    """Apaga todas as imagens antigas do encarte no diretório de destino antes de gerar novas."""
     try:
         pasta_dest = os.path.dirname(caminho_saida_base)
         if not pasta_dest:
@@ -78,7 +77,7 @@ def renderizar_paginas_jpg(config, produtos, caminho_saida_base):
         font_cod_bold      = ImageFont.truetype("arialbd.ttf", 20)
         font_desc_bold     = ImageFont.truetype("arialbd.ttf", 20)
         font_marca         = ImageFont.truetype("arialbd.ttf", 18)
-        font_preco_bold    = ImageFont.truetype("arialbd.ttf", 52)  # Preço maior e em destaque
+        font_preco_bold    = ImageFont.truetype("arialbd.ttf", 52)
         font_rod_destaque  = ImageFont.truetype("arialbd.ttf", 26)
         font_rod_validade  = ImageFont.truetype("arial.ttf", 18)
     except IOError:
@@ -167,7 +166,7 @@ def renderizar_paginas_jpg(config, produtos, caminho_saida_base):
             tarja_x2, tarja_y2 = x + largura_card - 10, y + 448
             draw.rectangle([tarja_x1, tarja_y1, tarja_x2, tarja_y2], fill=cor_tarja_bg)
 
-            # Tratamento de preço (formatação ou string pronta)
+            # Tratamento de preço
             preco_raw = str(prod.get('preco', '')).strip()
             if not preco_raw.startswith("R$") and not preco_raw.startswith(">="):
                 try:
@@ -178,14 +177,55 @@ def renderizar_paginas_jpg(config, produtos, caminho_saida_base):
             else:
                 preco_fmt = preco_raw
 
-            bbox_p = draw.textbbox((0, 0), preco_fmt, font=font_preco_bold)
-            largura_p = bbox_p[2] - bbox_p[0]
-            altura_p = bbox_p[3] - bbox_p[1]
+            largura_tarja = tarja_x2 - tarja_x1 - 10  # Folga de margem
 
-            x_preco = tarja_x1 + ((tarja_x2 - tarja_x1) - largura_p) // 2
-            y_preco = tarja_y1 + ((tarja_y2 - tarja_y1) - altura_p) // 2 - 6
+            # Ajuste dinâmico de fonte/quebra de linha se contiver múltiplos preços ('|')
+            if " | " in preco_fmt or "|" in preco_fmt:
+                linhas_preco = [p.strip() for p in preco_fmt.split("|")]
+                
+                # Tenta redimensionar a fonte para ver se cabe em 1 linha
+                tamanho_fonte = 34
+                try:
+                    font_temp = ImageFont.truetype("arialbd.ttf", tamanho_fonte)
+                except IOError:
+                    font_temp = ImageFont.load_default()
 
-            draw.text((x_preco, y_preco), preco_fmt, fill=cor_preco_texto, font=font_preco_bold)
+                bbox_p = draw.textbbox((0, 0), preco_fmt, font=font_temp)
+                largura_p = bbox_p[2] - bbox_p[0]
+
+                if largura_p <= largura_tarja:
+                    # Cabe em uma linha com a fonte ajustada
+                    altura_p = bbox_p[3] - bbox_p[1]
+                    x_preco = tarja_x1 + (largura_tarja + 10 - largura_p) // 2
+                    y_preco = tarja_y1 + ((tarja_y2 - tarja_y1) - altura_p) // 2 - 4
+                    draw.text((x_preco, y_preco), preco_fmt, fill=cor_preco_texto, font=font_temp)
+                else:
+                    # Não cabe: Quebra em 2 linhas com fonte proporcional
+                    tamanho_fonte_multi = 26
+                    try:
+                        font_multi = ImageFont.truetype("arialbd.ttf", tamanho_fonte_multi)
+                    except IOError:
+                        font_multi = ImageFont.load_default()
+
+                    altura_total_texto = len(linhas_preco) * 34
+                    y_inicio = tarja_y1 + ((tarja_y2 - tarja_y1) - altura_total_texto) // 2 - 2
+
+                    for i, lin in enumerate(linhas_preco):
+                        bbox_l = draw.textbbox((0, 0), lin, font=font_multi)
+                        largura_l = bbox_l[2] - bbox_l[0]
+                        x_l = tarja_x1 + (largura_tarja + 10 - largura_l) // 2
+                        y_l = y_inicio + (i * 36)
+                        draw.text((x_l, y_l), lin, fill=cor_preco_texto, font=font_multi)
+            else:
+                # Preço simples
+                bbox_p = draw.textbbox((0, 0), preco_fmt, font=font_preco_bold)
+                largura_p = bbox_p[2] - bbox_p[0]
+                altura_p = bbox_p[3] - bbox_p[1]
+
+                x_preco = tarja_x1 + ((tarja_x2 - tarja_x1) - largura_p) // 2
+                y_preco = tarja_y1 + ((tarja_y2 - tarja_y1) - altura_p) // 2 - 6
+
+                draw.text((x_preco, y_preco), preco_fmt, fill=cor_preco_texto, font=font_preco_bold)
 
         # 3. RODAPÉ
         y_rodape = ALTURA_TOTAL - ALTURA_RODAPE
