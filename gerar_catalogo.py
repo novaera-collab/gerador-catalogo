@@ -80,8 +80,9 @@ def renderizar_paginas_jpg(config, produtos, caminho_saida_base):
         font_preco_bold    = ImageFont.truetype("arialbd.ttf", 52)
         font_rod_destaque  = ImageFont.truetype("arialbd.ttf", 26)
         font_rod_validade  = ImageFont.truetype("arial.ttf", 18)
+        font_rod_tabela    = ImageFont.truetype("arial.ttf", 16)
     except IOError:
-        font_titulo_bold = font_sub_regular = font_cod_bold = font_desc_bold = font_marca = font_preco_bold = font_rod_validade = ImageFont.load_default()
+        font_titulo_bold = font_sub_regular = font_cod_bold = font_desc_bold = font_marca = font_preco_bold = font_rod_validade = font_rod_tabela = ImageFont.load_default()
 
     total_produtos = len(produtos)
     total_paginas = (total_produtos + PRODUTOS_POR_PAGINA - 1) // PRODUTOS_POR_PAGINA if total_produtos > 0 else 1
@@ -177,13 +178,11 @@ def renderizar_paginas_jpg(config, produtos, caminho_saida_base):
             else:
                 preco_fmt = preco_raw
 
-            largura_tarja = tarja_x2 - tarja_x1 - 10  # Folga de margem
+            largura_tarja = tarja_x2 - tarja_x1 - 10
 
-            # Ajuste dinâmico de fonte/quebra de linha se contiver múltiplos preços ('|')
             if " | " in preco_fmt or "|" in preco_fmt:
                 linhas_preco = [p.strip() for p in preco_fmt.split("|")]
                 
-                # Tenta redimensionar a fonte para ver se cabe em 1 linha
                 tamanho_fonte = 34
                 try:
                     font_temp = ImageFont.truetype("arialbd.ttf", tamanho_fonte)
@@ -194,13 +193,11 @@ def renderizar_paginas_jpg(config, produtos, caminho_saida_base):
                 largura_p = bbox_p[2] - bbox_p[0]
 
                 if largura_p <= largura_tarja:
-                    # Cabe em uma linha com a fonte ajustada
                     altura_p = bbox_p[3] - bbox_p[1]
                     x_preco = tarja_x1 + (largura_tarja + 10 - largura_p) // 2
                     y_preco = tarja_y1 + ((tarja_y2 - tarja_y1) - altura_p) // 2 - 4
                     draw.text((x_preco, y_preco), preco_fmt, fill=cor_preco_texto, font=font_temp)
                 else:
-                    # Não cabe: Quebra em 2 linhas com fonte proporcional
                     tamanho_fonte_multi = 26
                     try:
                         font_multi = ImageFont.truetype("arialbd.ttf", tamanho_fonte_multi)
@@ -217,7 +214,6 @@ def renderizar_paginas_jpg(config, produtos, caminho_saida_base):
                         y_l = y_inicio + (i * 36)
                         draw.text((x_l, y_l), lin, fill=cor_preco_texto, font=font_multi)
             else:
-                # Preço simples
                 bbox_p = draw.textbbox((0, 0), preco_fmt, font=font_preco_bold)
                 largura_p = bbox_p[2] - bbox_p[0]
                 altura_p = bbox_p[3] - bbox_p[1]
@@ -231,6 +227,7 @@ def renderizar_paginas_jpg(config, produtos, caminho_saida_base):
         y_rodape = ALTURA_TOTAL - ALTURA_RODAPE
         draw.rectangle([0, y_rodape, LARGURA_TOTAL, ALTURA_TOTAL], fill=cor_topo_rodape)
 
+        # Linha 1: Contato + WhatsApp + Telefone
         contato_str = str(config.get('rodape_contato', '')).strip()
         fone_str = str(config.get('rodape_fone', '')).strip()
         ico_whats = carregar_e_ajustar_imagem(config.get('rodape_logo_fone'), 42, 42)
@@ -247,7 +244,7 @@ def renderizar_paginas_jpg(config, produtos, caminho_saida_base):
 
         largura_total_l1 = larg_contato + larg_ico + larg_fone
         x_cursor = (LARGURA_TOTAL - largura_total_l1) // 2
-        y_l1 = y_rodape + 30
+        y_l1 = y_rodape + 20
 
         if texto_contato:
             draw.text((x_cursor, y_l1), texto_contato, fill="#FFFFFF", font=font_rod_destaque)
@@ -260,6 +257,7 @@ def renderizar_paginas_jpg(config, produtos, caminho_saida_base):
         if texto_fone:
             draw.text((x_cursor, y_l1), texto_fone, fill="#FFFFFF", font=font_rod_destaque)
 
+        # Linha 2: Período de Validade + Paginação
         validade_str = str(config.get('rodape_validade', '')).strip()
         if total_paginas > 1:
             validade_str += f"   (Página {num_pag + 1} de {total_paginas})"
@@ -268,8 +266,17 @@ def renderizar_paginas_jpg(config, produtos, caminho_saida_base):
             bbox_val = draw.textbbox((0, 0), validade_str, font=font_rod_validade)
             larg_val = bbox_val[2] - bbox_val[0]
             x_val = (LARGURA_TOTAL - larg_val) // 2
-            y_l2 = y_rodape + 95
+            y_l2 = y_rodape + 75
             draw.text((x_val, y_l2), validade_str, fill="#E0E0E0", font=font_rod_validade)
+
+        # Linha 3: Tabela de Preço Utilizada
+        tabela_str = str(config.get('rodape_tabela', '')).strip()
+        if tabela_str:
+            bbox_tab = draw.textbbox((0, 0), tabela_str, font=font_rod_tabela)
+            larg_tab = bbox_tab[2] - bbox_tab[0]
+            x_tab = (LARGURA_TOTAL - larg_tab) // 2
+            y_l3 = y_rodape + 112
+            draw.text((x_tab, y_l3), tabela_str, fill="#CCCCCC", font=font_rod_tabela)
 
         if total_paginas > 1:
             caminho_final_jpg = f"{nome_base}_{num_pag + 1}{ext}"
