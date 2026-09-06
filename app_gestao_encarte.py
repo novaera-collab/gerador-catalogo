@@ -186,10 +186,10 @@ def centralizar_no_topo_da_principal(modal, largura, altura):
 
     # Obtém a altura útil do monitor para evitar sobrepor a barra de tarefas do Windows
     screen_h = modal.winfo_screenheight()
-    altura_efetiva = min(altura, screen_h - 100)
+    altura_efetiva = min(altura, screen_h - 120)
 
     pos_x = main_x + max(0, (main_w - largura) // 2)
-    pos_y = max(10, main_y + 10)  # Posiciona no topo para maximizar o aproveitamento da área visível
+    pos_y = max(20, main_y + 30)  # Posiciona ajustado ao topo superior da janela pai
 
     modal.geometry(f"{largura}x{altura_efetiva}+{pos_x}+{pos_y}")
     modal.transient(root)
@@ -697,15 +697,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
         if self.encarte_id:
             self.carregar_dados()
 
-        # Altura ajustada para 520px para garantir total visibilidade do rodapé
         centralizar_no_topo_da_principal(self, 960, 520)
-
-    def alternar_tema(self):
-        modo_atual = ctk.get_appearance_mode()
-        if modo_atual == "Dark":
-            ctk.set_appearance_mode("Light")
-        else:
-            ctk.set_appearance_mode("Dark")
 
     def criar_widgets(self):
         frame_top_bar = ctk.CTkFrame(self, fg_color="transparent")
@@ -764,13 +756,9 @@ class FormEncarteWindow(ctk.CTkToplevel):
         self.frame_lista = ctk.CTkScrollableFrame(self)
         self.frame_lista.pack(fill="both", expand=True, padx=15, pady=5)
 
-        # Rodapé otimizado com padding e alturas enxutas
+        # Rodapé com os botões de ação do formulário
         frame_botoes = ctk.CTkFrame(self, fg_color="transparent")
         frame_botoes.pack(fill="x", padx=15, pady=(2, 4))
-
-        # Botão para alternar tema entre claro e escuro
-        btn_tema = ctk.CTkButton(frame_botoes, text="☀️ Modo Claro / 🌙 Escuro", fg_color="#455A64", hover_color="#37474F", height=32, width=170, command=self.alternar_tema)
-        btn_tema.pack(side="left", padx=5)
 
         btn_salvar = ctk.CTkButton(frame_botoes, text="💾 Salvar no Banco", font=ctk.CTkFont(weight="bold"), fg_color="#2E7D32", hover_color="#1B5E20", height=32, width=150, command=self.salvar_banco)
         btn_salvar.pack(side="right", padx=5)
@@ -1022,17 +1010,21 @@ class AppPrincipal(ctk.CTk):
         super().__init__()
         self.title("Gestão de Encartes - v2.0")
         
-        # Tela principal ampliada
-        self.geometry("1100x720")
-        self.minsize(1000, 650)
+        # Posicionamento inicial ajustado no topo superior e altura otimizada
+        self.geometry("1100x640+50+30")
+        self.minsize(1000, 580)
 
         frame_topo = ctk.CTkFrame(self)
-        frame_topo.pack(fill="x", padx=15, pady=(12, 5))
+        frame_topo.pack(fill="x", padx=15, pady=(10, 5))
 
         ctk.CTkLabel(frame_topo, text="📋 Encartes Cadastrados", font=ctk.CTkFont(size=18, weight="bold")).pack(side="left", padx=15, pady=8)
         
         btn_sair = ctk.CTkButton(frame_topo, text="🚪 Sair", fg_color="#C62828", hover_color="#B71C1C", width=90, height=32, command=self.destroy)
         btn_sair.pack(side="right", padx=6, pady=8)
+
+        # Botão de Tema adicionado à tela principal
+        btn_tema = ctk.CTkButton(frame_topo, text="🌓 Tema", fg_color="#455A64", hover_color="#37474F", width=90, height=32, command=self.alternar_tema)
+        btn_tema.pack(side="right", padx=6, pady=8)
 
         btn_params = ctk.CTkButton(frame_topo, text="⚙️ Parâmetros", fg_color="#455A64", hover_color="#37474F", width=120, height=32, command=self.abrir_parametros)
         btn_params.pack(side="right", padx=6, pady=8)
@@ -1052,6 +1044,13 @@ class AppPrincipal(ctk.CTk):
         self.frame_lista.pack(fill="both", expand=True, padx=15, pady=5)
 
         self.carregar_encartes()
+
+    def alternar_tema(self):
+        modo_atual = ctk.get_appearance_mode()
+        if modo_atual == "Dark":
+            ctk.set_appearance_mode("Light")
+        else:
+            ctk.set_appearance_mode("Dark")
 
     def abrir_parametros(self):
         ParametrosWindow(self)
@@ -1107,7 +1106,6 @@ class AppPrincipal(ctk.CTk):
                 lbl_info = f"#{enc['id']} - {enc['titulo']}\nPeríodo: {dt_ini_str} a {dt_fim_str}"
                 ctk.CTkLabel(row, text=lbl_info, anchor="w", font=ctk.CTkFont(size=13, weight="bold"), text_color=cor_status, justify="left").pack(side="left", padx=15, pady=10, fill="x", expand=True)
 
-                # Container para botões em linha (um ao lado do outro)
                 frame_acoes = ctk.CTkFrame(row, fg_color="transparent")
                 frame_acoes.pack(side="right", padx=10, pady=5)
 
