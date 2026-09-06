@@ -172,7 +172,7 @@ def salvar_parametros_banco(p):
     conn.close()
 
 def centralizar_no_topo_da_principal(modal, largura, altura):
-    """Posiciona a janela modal centralizada horizontalmente no topo da janela principal, garantindo foco modal."""
+    """Posiciona a janela modal centralizada horizontalmente no topo da janela principal, garantindo foco modal e respeitando o limite vertical da tela."""
     modal.update_idletasks()
     
     # Descobre a janela principal raiz
@@ -183,12 +183,15 @@ def centralizar_no_topo_da_principal(modal, largura, altura):
     main_x = root.winfo_x()
     main_y = root.winfo_y()
     main_w = root.winfo_width()
-    main_h = root.winfo_height()
+
+    # Obtém a altura útil do monitor para evitar sobrepor a barra de tarefas do Windows
+    screen_h = modal.winfo_screenheight()
+    altura_efetiva = min(altura, screen_h - 100)
 
     pos_x = main_x + max(0, (main_w - largura) // 2)
-    pos_y = main_y + 35  # Leve espaçamento do topo da barra de título principal
+    pos_y = max(10, main_y + 10)  # Posiciona no topo para maximizar o aproveitamento da área visível
 
-    modal.geometry(f"{largura}x{altura}+{pos_x}+{pos_y}")
+    modal.geometry(f"{largura}x{altura_efetiva}+{pos_x}+{pos_y}")
     modal.transient(root)
     modal.grab_set()
     modal.focus_force()
@@ -478,7 +481,7 @@ class ParametrosWindow(ctk.CTkToplevel):
         btn_salvar = ctk.CTkButton(self, text="💾 Salvar Parâmetros", fg_color="#2E7D32", hover_color="#1B5E20", font=ctk.CTkFont(weight="bold"), height=38, command=self.salvar)
         btn_salvar.pack(pady=(0, 15))
 
-        centralizar_no_topo_da_principal(self, 680, 630)
+        centralizar_no_topo_da_principal(self, 680, 520)
 
     def _criar_campo_caminho(self, parent, label_text, row, valor_inicial, pasta=True):
         ctk.CTkLabel(parent, text=label_text).grid(row=row, column=0, padx=10, pady=6, sticky="w")
@@ -627,7 +630,7 @@ class PesquisaProdutoModal(ctk.CTkToplevel):
         self.frame_resultados = ctk.CTkScrollableFrame(self)
         self.frame_resultados.pack(fill="both", expand=True, padx=15, pady=5)
 
-        centralizar_no_topo_da_principal(self, 780, 520)
+        centralizar_no_topo_da_principal(self, 780, 500)
 
     def pesquisar(self):
         termo = self.txt_busca.get().strip()
@@ -694,8 +697,8 @@ class FormEncarteWindow(ctk.CTkToplevel):
         if self.encarte_id:
             self.carregar_dados()
 
-        # Altura reduzida para elevar a posição da janela na tela
-        centralizar_no_topo_da_principal(self, 960, 580)
+        # Altura ajustada para 520px para garantir total visibilidade do rodapé
+        centralizar_no_topo_da_principal(self, 960, 520)
 
     def alternar_tema(self):
         modo_atual = ctk.get_appearance_mode()
@@ -761,17 +764,18 @@ class FormEncarteWindow(ctk.CTkToplevel):
         self.frame_lista = ctk.CTkScrollableFrame(self)
         self.frame_lista.pack(fill="both", expand=True, padx=15, pady=5)
 
+        # Rodapé otimizado com padding e alturas enxutas
         frame_botoes = ctk.CTkFrame(self, fg_color="transparent")
-        frame_botoes.pack(fill="x", padx=15, pady=(2, 10))
+        frame_botoes.pack(fill="x", padx=15, pady=(2, 4))
 
         # Botão para alternar tema entre claro e escuro
-        btn_tema = ctk.CTkButton(frame_botoes, text="☀️ Modo Claro / 🌙 Escuro", fg_color="#455A64", hover_color="#37474F", height=38, width=170, command=self.alternar_tema)
+        btn_tema = ctk.CTkButton(frame_botoes, text="☀️ Modo Claro / 🌙 Escuro", fg_color="#455A64", hover_color="#37474F", height=32, width=170, command=self.alternar_tema)
         btn_tema.pack(side="left", padx=5)
 
-        btn_salvar = ctk.CTkButton(frame_botoes, text="💾 Salvar no Banco", font=ctk.CTkFont(weight="bold"), fg_color="#2E7D32", hover_color="#1B5E20", height=38, width=150, command=self.salvar_banco)
+        btn_salvar = ctk.CTkButton(frame_botoes, text="💾 Salvar no Banco", font=ctk.CTkFont(weight="bold"), fg_color="#2E7D32", hover_color="#1B5E20", height=32, width=150, command=self.salvar_banco)
         btn_salvar.pack(side="right", padx=5)
 
-        btn_cancelar = ctk.CTkButton(frame_botoes, text="❌ Cancelar", fg_color="#C62828", hover_color="#B71C1C", height=38, width=110, command=self.destroy)
+        btn_cancelar = ctk.CTkButton(frame_botoes, text="❌ Cancelar", fg_color="#C62828", hover_color="#B71C1C", height=32, width=110, command=self.destroy)
         btn_cancelar.pack(side="right", padx=5)
 
     def formatar_codigo_5_digitos(self, valor):
