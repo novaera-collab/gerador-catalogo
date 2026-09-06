@@ -19,7 +19,7 @@ if sys.platform.startswith("win"):
     ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
 
 def resolver_caminho(caminho_raw):
-    """Trata caminhos genéricos como C:\\Downloads redirecionando para a pasta do usuário logado."""
+    """Trata caminhos genéricos como C:\Downloads redirecionando para a pasta do usuário logado."""
     if not caminho_raw:
         return ""
     
@@ -694,7 +694,15 @@ class FormEncarteWindow(ctk.CTkToplevel):
         if self.encarte_id:
             self.carregar_dados()
 
-        centralizar_no_topo_da_principal(self, 960, 640)
+        # Altura reduzida para elevar a posição da janela na tela
+        centralizar_no_topo_da_principal(self, 960, 580)
+
+    def alternar_tema(self):
+        modo_atual = ctk.get_appearance_mode()
+        if modo_atual == "Dark":
+            ctk.set_appearance_mode("Light")
+        else:
+            ctk.set_appearance_mode("Dark")
 
     def criar_widgets(self):
         frame_top_bar = ctk.CTkFrame(self, fg_color="transparent")
@@ -755,6 +763,10 @@ class FormEncarteWindow(ctk.CTkToplevel):
 
         frame_botoes = ctk.CTkFrame(self, fg_color="transparent")
         frame_botoes.pack(fill="x", padx=15, pady=(2, 10))
+
+        # Botão para alternar tema entre claro e escuro
+        btn_tema = ctk.CTkButton(frame_botoes, text="☀️ Modo Claro / 🌙 Escuro", fg_color="#455A64", hover_color="#37474F", height=38, width=170, command=self.alternar_tema)
+        btn_tema.pack(side="left", padx=5)
 
         btn_salvar = ctk.CTkButton(frame_botoes, text="💾 Salvar no Banco", font=ctk.CTkFont(weight="bold"), fg_color="#2E7D32", hover_color="#1B5E20", height=38, width=150, command=self.salvar_banco)
         btn_salvar.pack(side="right", padx=5)
