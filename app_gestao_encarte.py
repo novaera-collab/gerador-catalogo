@@ -6,6 +6,7 @@ import re
 import traceback
 import base64
 import subprocess
+import getpass
 import customtkinter as ctk
 from datetime import datetime, date
 from tkinter import messagebox, Toplevel, filedialog
@@ -16,6 +17,27 @@ from tkcalendar import DateEntry
 if sys.platform.startswith("win"):
     import ctypes
     ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
+
+def resolver_caminho(caminho_raw):
+    """Trata caminhos genéricos como C:\\Downloads redirecionando para a pasta do usuário logado."""
+    if not caminho_raw:
+        return ""
+    
+    caminho_str = str(caminho_raw).strip()
+    
+    # 1. Trata casos onde foi cadastrado C:\Downloads ou C:/Downloads diretamente
+    caminho_normalizado = caminho_str.replace('/', '\\').rstrip('\\')
+    if caminho_normalizado.lower() == r"c:\downloads":
+        try:
+            usuario = getpass.getuser()
+            caminho_str = os.path.join(os.environ.get("SystemDrive", "C:"), "\\Users", usuario, "Downloads")
+        except Exception:
+            caminho_str = os.path.expanduser("~/Downloads")
+
+    # 2. Expande variáveis de ambiente (%USERPROFILE%, %TEMP%, ~)
+    caminho_expandido = os.path.expanduser(os.path.expandvars(caminho_str))
+    
+    return os.path.abspath(caminho_expandido)
 
 def mostrar_erro_fatal(exc_type, exc_value, exc_traceback):
     erro_msg = "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
@@ -207,7 +229,6 @@ class GerarEncarteModal(ctk.CTkToplevel):
 
         ctk.CTkLabel(self, text=f"Gerar Encarte: {encarte_titulo}", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=(15, 10))
 
-        # Contato
         frame_ct = ctk.CTkFrame(self, fg_color="transparent")
         frame_ct.pack(fill="x", padx=20, pady=5)
 
@@ -218,7 +239,6 @@ class GerarEncarteModal(ctk.CTkToplevel):
         btn_novo_contato = ctk.CTkButton(frame_ct, text="+ Novo", width=60, fg_color="#1976D2", command=self.abrir_novo_contato)
         btn_novo_contato.grid(row=0, column=2, padx=5)
 
-        # Tabela de Preço (1, 2 ou 3)
         frame_tb = ctk.CTkFrame(self, fg_color="transparent")
         frame_tb.pack(fill="x", padx=20, pady=5)
 
@@ -227,7 +247,6 @@ class GerarEncarteModal(ctk.CTkToplevel):
         self.cmb_tabela.set("1")
         self.cmb_tabela.grid(row=0, column=1, sticky="w", padx=5)
 
-        # Saldo (Default: Positivos)
         frame_sd = ctk.CTkFrame(self, fg_color="transparent")
         frame_sd.pack(fill="x", padx=20, pady=10)
 
@@ -277,9 +296,11 @@ class GerarEncarteModal(ctk.CTkToplevel):
         tabela_sel = self.cmb_tabela.get()
 
         params = carregar_parametros_banco()
-        dir_encarte = os.path.abspath(os.path.expanduser(os.path.expandvars(params.get("dir_encarte", "").strip())))
-        dir_csv = os.path.abspath(os.path.expanduser(os.path.expandvars(params.get("dir_csv", "").strip())))
-        dir_jpg = os.path.abspath(os.path.expanduser(os.path.expandvars(params.get("dir_jpg", "").strip())))
+        
+        # Tratamento dinâmico do caminho dos diretórios
+        dir_encarte = resolver_caminho(params.get("dir_encarte", ""))
+        dir_csv     = resolver_caminho(params.get("dir_csv", ""))
+        dir_jpg     = resolver_caminho(params.get("dir_jpg", ""))
 
         if not dir_encarte or not os.path.exists(dir_encarte):
             messagebox.showerror("Erro de Configuração", f"Diretório Executáveis/Encarte (dir_encarte) inválido:\n{dir_encarte}", parent=self)
@@ -290,8 +311,11 @@ class GerarEncarteModal(ctk.CTkToplevel):
             return
 
         if not dir_jpg or not os.path.exists(dir_jpg):
-            messagebox.showerror("Erro de Configuração", f"Diretório de JPG (dir_jpg) inválido:\n{dir_jpg}", parent=self)
-            return
+            try:
+                os.makedirs(dir_jpg, exist_ok=True)
+            except Exception:
+                messagebox.showerror("Erro de Configuração", f"Diretório de JPG (dir_jpg) inválido:\n{dir_jpg}", parent=self)
+                return
 
         path_sql = os.path.join(dir_encarte, "consulta_encarte.sql")
         if not os.path.exists(path_sql):
@@ -322,12 +346,10 @@ class GerarEncarteModal(ctk.CTkToplevel):
             linhas = cur.fetchall()
             conn.close()
 
-            # Sanitiza o nome do contato para o arquivo CSV
             nome_contato_limpo = re.sub(r'[^\w\s-]', '', contato_sel).strip().replace(" ", "_")
             if not nome_contato_limpo:
                 nome_contato_limpo = "geral"
 
-            # Nome dos arquivos CSV e JPG ajustados dinamicamente
             nome_arquivo_csv = f"{self.encarte_id}_encarte_{nome_contato_limpo}.csv"
             nome_arquivo_jpg = f"{self.encarte_id}_DADOS_CATALOGO.jpg"
 
@@ -340,11 +362,9 @@ class GerarEncarteModal(ctk.CTkToplevel):
                     if linha_texto is not None:
                         f_csv.write(f"{str(linha_texto).strip()}\r\n")
 
-            # Executáveis conforme cadastrados/existentes no diretório de parâmetros
             exe_gerar = os.path.join(dir_encarte, "gerar_catalogo.exe")
             exe_viewer = os.path.join(dir_encarte, "visualizar_catalogo.exe")
 
-            # Chamada dos executáveis parametrizados
             if os.path.exists(exe_gerar):
                 subprocess.run([exe_gerar, path_out_csv, path_out_jpg], check=False)
             else:
