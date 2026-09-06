@@ -105,7 +105,7 @@ class AppVisualizador:
         self.num_whats = limpar_numero_whatsapp(self.meta.get('fone', ''))
 
         self.root.title("Visualizador de Encarte - Oeste Pharma")
-        self.root.geometry("1050x800")
+        self.root.geometry("1180x800")
         self.root.configure(bg="#f0f0f0")
         
         # Traz a janela para a frente
@@ -122,25 +122,39 @@ class AppVisualizador:
         frame_topo = tk.Frame(self.root, bg="#22702C")
         frame_topo.pack(fill="x", side="top", ipady=8)
 
-        lbl_titulo = tk.Label(frame_topo, text="Encarte Gerado com Sucesso!", font=("Arial", 13, "bold"), fg="white", bg="#22702C")
-        lbl_titulo.pack(side="left", padx=15)
+        lbl_titulo = tk.Label(frame_topo, text="Encarte Gerado com Sucesso!", font=("Arial", 12, "bold"), fg="white", bg="#22702C")
+        lbl_titulo.pack(side="left", padx=10)
 
+        # Botão WhatsApp
         btn_whats = tk.Button(
             frame_topo, 
-            text="📱 Copiar Página Atual e Abrir WhatsApp", 
-            font=("Arial", 10, "bold"), 
+            text="📱 Copiar e Abrir Whats", 
+            font=("Arial", 9, "bold"), 
             bg="#25D366", 
             fg="white", 
             activebackground="#1EBE5D",
             cursor="hand2",
             command=self.abrir_whatsapp
         )
-        btn_whats.pack(side="right", padx=15)
+        btn_whats.pack(side="right", padx=8)
+
+        # Botão Apenas Copiar
+        btn_copiar = tk.Button(
+            frame_topo, 
+            text="📋 Apenas Copiar Imagem", 
+            font=("Arial", 9, "bold"), 
+            bg="#FF9800", 
+            fg="white", 
+            activebackground="#F57C00",
+            cursor="hand2",
+            command=self.apenas_copiar_imagem
+        )
+        btn_copiar.pack(side="right", padx=5)
 
         btn_atualizar = tk.Button(
             frame_topo, 
             text="🔄 Atualizar (F5)", 
-            font=("Arial", 10, "bold"), 
+            font=("Arial", 9, "bold"), 
             bg="#0288D1", 
             fg="white", 
             activebackground="#0277BD",
@@ -151,8 +165,8 @@ class AppVisualizador:
 
         btn_pasta = tk.Button(
             frame_topo, 
-            text="📁 Abrir Pasta das Imagens", 
-            font=("Arial", 10), 
+            text="📁 Abrir Pasta", 
+            font=("Arial", 9), 
             bg="#ffffff", 
             fg="#333333", 
             cursor="hand2",
@@ -192,7 +206,6 @@ class AppVisualizador:
         if not caminho_base:
             return []
 
-        # Remove extensão e sufixos numéricos para descobrir o NOME LIMPO BASE
         nome_sem_ext = os.path.splitext(caminho_base)[0]
         nome_limpo = re.sub(r'_\d+$', '', nome_sem_ext)
         pasta = os.path.dirname(caminho_base) or os.getcwd()
@@ -204,22 +217,18 @@ class AppVisualizador:
                     caminho_completo = os.path.join(pasta, f)
                     sem_ext = os.path.splitext(caminho_completo)[0]
                     
-                    # Captura se for exatamente o nome limpo ou se começar com 'NOME_LIMPO_'
                     if sem_ext == nome_limpo or sem_ext.startswith(nome_limpo + "_"):
                         arquivos_encontrados.append(caminho_completo)
 
-        # Função para ordenar: Arquivo base sem número fica por último ou em 1º, 
-        # e arquivos com _1, _2, _3 entram na ordem numérica exata.
         def extrair_ordem(caminho):
             base = os.path.splitext(caminho)[0]
             match = re.search(r'_(\d+)$', base)
             if match:
                 return int(match.group(1))
-            return 0  # Caso seja o arquivo base sem sufixo_N
+            return 0
 
         arquivos_encontrados.sort(key=extrair_ordem)
         
-        # Remove duplicados mantendo a ordem
         resultado_final = []
         for item in arquivos_encontrados:
             if item not in resultado_final:
@@ -232,7 +241,6 @@ class AppVisualizador:
         novas_paginas = self.localizar_paginas_geradas(self.jpg_path)
         self.lista_paginas = novas_paginas
         
-        # Garante que o índice atual permaneça válido dentro do novo total
         if self.indice_atual >= len(self.lista_paginas):
             self.indice_atual = max(0, len(self.lista_paginas) - 1)
             
@@ -244,7 +252,7 @@ class AppVisualizador:
 
         if not self.lista_paginas:
             self.canvas.create_text(
-                525, 350, 
+                590, 350, 
                 text=f"Nenhum arquivo JPG encontrado em:\n{self.jpg_path}", 
                 fill="white", font=("Arial", 13), justify="center"
             )
@@ -256,28 +264,25 @@ class AppVisualizador:
         total = len(self.lista_paginas)
         self.lbl_paginacao.config(text=f"Página {self.indice_atual + 1} de {total}")
 
-        # Atualiza estado dos botões de navegação
         self.btn_ant.config(state="normal" if self.indice_atual > 0 else "disabled")
         self.btn_prox.config(state="normal" if self.indice_atual < total - 1 else "disabled")
 
-        # Carrega a imagem da página atual
         caminho_atual = self.lista_paginas[self.indice_atual]
         try:
             self.pil_img = Image.open(caminho_atual)
             img_w, img_h = self.pil_img.size
             
-            # Ajuste de proporção na tela
-            max_w, max_h = 1000, 650
+            max_w, max_h = 1050, 650
             ratio = min(max_w / img_w, max_h / img_h)
             novo_tamanho = (int(img_w * ratio), int(img_h * ratio))
 
             img_resized = self.pil_img.resize(novo_tamanho, Image.Resampling.LANCZOS)
             self.tk_img = ImageTk.PhotoImage(img_resized)
 
-            self.canvas.create_image(525, 330, image=self.tk_img, anchor="center")
+            self.canvas.create_image(590, 330, image=self.tk_img, anchor="center")
         except Exception as e:
             self.canvas.create_text(
-                525, 350, text=f"Erro ao carregar a imagem:\n{e}", fill="red", font=("Arial", 12)
+                590, 350, text=f"Erro ao carregar a imagem:\n{e}", fill="red", font=("Arial", 12)
             )
 
     def pagina_anterior(self):
@@ -290,38 +295,61 @@ class AppVisualizador:
             self.indice_atual += 1
             self.atualizar_visualizacao()
 
+    def apenas_copiar_imagem(self):
+        """Apenas copia a página atual para a área de transferência, sem abrir navegador."""
+        if not self.lista_paginas:
+            return
+
+        caminho_atual = self.lista_paginas[self.indice_atual]
+        copiou = copiar_imagem_para_clipboard(caminho_atual)
+
+        if copiou:
+            messagebox.showinfo(
+                "Imagem Copiada!", 
+                f"A Página {self.indice_atual + 1} foi copiada para a área de transferência!\n\n"
+                "Agora você pode pressionar CTRL + V em qualquer conversa ou programa."
+            )
+
     def abrir_whatsapp(self):
         if not self.lista_paginas:
             return
 
-        # Copia a página selecionada no momento para o Clipboard
         caminho_atual = self.lista_paginas[self.indice_atual]
         copiou = copiar_imagem_para_clipboard(caminho_atual)
 
-        total_paginas = len(self.lista_paginas)
-        msg_extra = ""
-        if total_paginas > 1:
-            msg_extra = f"\n\n💡 Seu encarte possui {total_paginas} páginas! Esta é a PÁGINA {self.indice_atual + 1}. Você pode folhear as páginas usando as setas do programa para copiar as outras também."
+        # Abre o navegador APENAS se for a Página 1 (indice_atual == 0)
+        if self.indice_atual == 0:
+            total_paginas = len(self.lista_paginas)
+            msg_extra = ""
+            if total_paginas > 1:
+                msg_extra = f"\n\n💡 Seu encarte possui {total_paginas} páginas. Para as próximas páginas, basta folhear no programa e clicar no botão para copiar!"
 
-        if copiou:
-            messagebox.showinfo(
-                "Página Copiada!", 
-                f"A Página {self.indice_atual + 1} foi COPIADA para a memória!\n\n"
-                "Ao abrir o WhatsApp, pressione CTRL + V no campo de mensagem para colar a imagem."
-                f"{msg_extra}"
-            )
+            if copiou:
+                messagebox.showinfo(
+                    "Página 1 Copiada!", 
+                    "A Página 1 foi COPIADA para a memória!\n\n"
+                    "O WhatsApp será aberto. Basta pressionar CTRL + V para colar a imagem."
+                    f"{msg_extra}"
+                )
 
-        # Abre conversa no WhatsApp
-        nome_contato = self.meta.get('nome_contato', '')
-        saudacao = f"Olá {nome_contato}!" if nome_contato else "Olá!"
-        mensagem = f"{saudacao} Segue nosso {self.meta.get('titulo', 'Encarte de Ofertas')}."
-        msg_encoded = urllib.parse.quote(mensagem)
+            nome_contato = self.meta.get('nome_contato', '')
+            saudacao = f"Olá {nome_contato}!" if nome_contato else "Olá!"
+            mensagem = f"{saudacao} Segue nosso {self.meta.get('titulo', 'Encarte de Ofertas')}."
+            msg_encoded = urllib.parse.quote(mensagem)
 
-        if self.num_whats:
-            url = f"https://api.whatsapp.com/send?phone={self.num_whats}&text={msg_encoded}"
-            webbrowser.open(url)
+            if self.num_whats:
+                url = f"https://api.whatsapp.com/send?phone={self.num_whats}&text={msg_encoded}"
+                webbrowser.open(url)
+            else:
+                webbrowser.open("https://web.whatsapp.com")
         else:
-            webbrowser.open("https://web.whatsapp.com")
+            # Das páginas 2 em diante, apenas avisa que copiou
+            if copiou:
+                messagebox.showinfo(
+                    "Página Copiada!", 
+                    f"A Página {self.indice_atual + 1} foi copiada!\n\n"
+                    "Volte para a janela do WhatsApp já aberta e pressione CTRL + V para colar."
+                )
 
     def abrir_pasta(self):
         caminho_target = self.lista_paginas[self.indice_atual] if self.lista_paginas else self.jpg_path
