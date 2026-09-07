@@ -175,7 +175,6 @@ def centralizar_no_topo_da_principal(modal, largura, altura):
     """Posiciona a janela modal centralizada horizontalmente no topo da janela principal, garantindo foco modal e respeitando o limite vertical da tela."""
     modal.update_idletasks()
     
-    # Descobre a janela principal raiz
     root = modal.winfo_toplevel()
     while root.master:
         root = root.master.winfo_toplevel()
@@ -184,12 +183,11 @@ def centralizar_no_topo_da_principal(modal, largura, altura):
     main_y = root.winfo_y()
     main_w = root.winfo_width()
 
-    # Obtém a altura útil do monitor para evitar sobrepor a barra de tarefas do Windows
     screen_h = modal.winfo_screenheight()
     altura_efetiva = min(altura, screen_h - 120)
 
     pos_x = main_x + max(0, (main_w - largura) // 2)
-    pos_y = max(20, main_y + 30)  # Posiciona ajustado ao topo superior da janela pai
+    pos_y = max(20, main_y + 30)
 
     modal.geometry(f"{largura}x{altura_efetiva}+{pos_x}+{pos_y}")
     modal.transient(root)
@@ -671,7 +669,7 @@ class PesquisaProdutoModal(ctk.CTkToplevel):
                 row = ctk.CTkFrame(self.frame_resultados)
                 row.pack(fill="x", pady=2, padx=2)
 
-                ctk.CTkLabel(row, text=f"[{cod_str}]", width=80, font=ctk.CTkFont(weight="bold"), text_color="#A5D6A7").pack(side="left", padx=5)
+                ctk.CTkLabel(row, text=f"[{cod_str}]", width=80, font=ctk.CTkFont(weight="bold"), text_color=("#2E7D32", "#A5D6A7")).pack(side="left", padx=5)
                 ctk.CTkLabel(row, text=nome_prod, anchor="w").pack(side="left", fill="x", expand=True, padx=5)
 
                 btn_sel = ctk.CTkButton(row, text="✔ Selecionar", width=100, fg_color="#2E7D32", hover_color="#1B5E20", command=lambda c=cod_str: self.selecionar(c))
@@ -744,7 +742,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
         self.txt_p_qtde = ctk.CTkEntry(frame_prod, width=65, placeholder_text="1.00")
         self.txt_p_qtde.insert(0, "1")
         self.txt_p_qtde.grid(row=0, column=4, padx=(2, 2), pady=6)
-        ctk.CTkLabel(frame_prod, text="unid.", text_color="gray").grid(row=0, column=5, padx=(0, 8), pady=6)
+        ctk.CTkLabel(frame_prod, text="unid.", text_color=("gray30", "gray70")).grid(row=0, column=5, padx=(0, 8), pady=6)
 
         ctk.CTkLabel(frame_prod, text="Valor Oferta (R$):").grid(row=0, column=6, padx=2, pady=6)
         self.txt_p_preco = ctk.CTkEntry(frame_prod, width=95, placeholder_text="0.00")
@@ -756,7 +754,6 @@ class FormEncarteWindow(ctk.CTkToplevel):
         self.frame_lista = ctk.CTkScrollableFrame(self)
         self.frame_lista.pack(fill="both", expand=True, padx=15, pady=5)
 
-        # Rodapé com os botões de ação do formulário
         frame_botoes = ctk.CTkFrame(self, fg_color="transparent")
         frame_botoes.pack(fill="x", padx=15, pady=(2, 4))
 
@@ -884,10 +881,13 @@ class FormEncarteWindow(ctk.CTkToplevel):
             ctk.CTkLabel(f_row, text=f"Código: {item['codigo_prod']}", width=140, anchor="w", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=5)
             
             qtde_str = f"{item['qtde_oferta']:.2f}".rstrip('0').rstrip('.')
-            ctk.CTkLabel(f_row, text=f"A partir de {qtde_str} un.", width=140, anchor="w", text_color="#81D4FA").pack(side="left", padx=5)
+            # Ajuste de contraste para o texto da quantidade: preto no Light, azul no Dark
+            ctk.CTkLabel(f_row, text=f"A partir de {qtde_str} un.", width=140, anchor="w", text_color=("#000000", "#81D4FA")).pack(side="left", padx=5)
 
+            # Ajuste de contraste para o texto de preço
+            cor_preco = ("#2E7D32", "#A5D6A7") if item['preco_oferta'] > 0 else ("#E65100", "#FFB74D")
             lbl_preco = f"R$ {item['preco_oferta']:.2f}" if item['preco_oferta'] > 0 else "Preço Atual (R$ 0.00)"
-            ctk.CTkLabel(f_row, text=lbl_preco, width=160, text_color="#A5D6A7" if item['preco_oferta'] > 0 else "#FFB74D", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=5)
+            ctk.CTkLabel(f_row, text=lbl_preco, width=160, text_color=cor_preco, font=ctk.CTkFont(weight="bold")).pack(side="left", padx=5)
 
             btn_del = ctk.CTkButton(f_row, text="❌", width=36, height=28, fg_color="#C62828", hover_color="#B71C1C", command=lambda i=idx: self.remover_item(i))
             btn_del.pack(side="right", padx=3)
@@ -1010,7 +1010,6 @@ class AppPrincipal(ctk.CTk):
         super().__init__()
         self.title("Gestão de Encartes - v2.0")
         
-        # Posicionamento inicial ajustado no topo superior e altura otimizada
         self.geometry("1100x640+50+30")
         self.minsize(1000, 580)
 
@@ -1022,7 +1021,6 @@ class AppPrincipal(ctk.CTk):
         btn_sair = ctk.CTkButton(frame_topo, text="🚪 Sair", fg_color="#C62828", hover_color="#B71C1C", width=90, height=32, command=self.destroy)
         btn_sair.pack(side="right", padx=6, pady=8)
 
-        # Botão de Tema adicionado à tela principal
         btn_tema = ctk.CTkButton(frame_topo, text="🌓 Tema", fg_color="#455A64", hover_color="#37474F", width=90, height=32, command=self.alternar_tema)
         btn_tema.pack(side="right", padx=6, pady=8)
 
@@ -1101,7 +1099,12 @@ class AppPrincipal(ctk.CTk):
                         data_vencimento = hoje
 
                 vencido = data_vencimento < hoje
-                cor_status = "#EF5350" if vencido else "#66BB6A"
+                
+                # Aplicação da regra: Vermelho para vencidos e Preto (Modo Claro) / Branco (Modo Escuro) para os vigentes
+                if vencido:
+                    cor_status = "#EF5350"
+                else:
+                    cor_status = ("#000000", "#FFFFFF")
 
                 lbl_info = f"#{enc['id']} - {enc['titulo']}\nPeríodo: {dt_ini_str} a {dt_fim_str}"
                 ctk.CTkLabel(row, text=lbl_info, anchor="w", font=ctk.CTkFont(size=13, weight="bold"), text_color=cor_status, justify="left").pack(side="left", padx=15, pady=10, fill="x", expand=True)
