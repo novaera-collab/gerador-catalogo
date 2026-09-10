@@ -198,67 +198,83 @@ class NovoContatoModal(ctk.CTkToplevel):
     def __init__(self, parent, callback_sucesso):
         super().__init__(parent)
         self.callback_sucesso = callback_sucesso
-        self.contato_existente_id = None
-        self.title("Gerenciar Contato")
+        self.contato_edicao_id = None
+        self.title("Gerenciar Contatos")
 
-        ctk.CTkLabel(self, text="Nome:").pack(anchor="w", padx=20, pady=(15, 2))
-        self.txt_nome = ctk.CTkEntry(self, width=320)
-        self.txt_nome.pack(padx=20, pady=2)
-        # Eventos para consultar se o contato já existe ao perder o foco ou pressionar Enter
-        self.txt_nome.bind("<FocusOut>", self.verificar_contato_existente)
-        self.txt_nome.bind("<Return>", self.verificar_contato_existente)
+        # Form de Inclusão / Edição
+        frame_form = ctk.CTkFrame(self)
+        frame_form.pack(fill="x", padx=15, pady=10)
 
-        ctk.CTkLabel(self, text="Telefone:").pack(anchor="w", padx=20, pady=(10, 2))
-        self.txt_fone = ctk.CTkEntry(self, width=320, placeholder_text="(45) 99999-9999")
-        self.txt_fone.pack(padx=20, pady=2)
+        ctk.CTkLabel(frame_form, text="Nome:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        self.txt_nome = ctk.CTkEntry(frame_form, width=220)
+        self.txt_nome.grid(row=0, column=1, padx=5, pady=5)
 
-        # Rótulo para alertar sobre o contato encontrado
-        self.lbl_status = ctk.CTkLabel(self, text="", text_color="#FFB74D", font=ctk.CTkFont(size=12, weight="bold"))
-        self.lbl_status.pack(pady=(5, 0))
+        ctk.CTkLabel(frame_form, text="Telefone:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        self.txt_fone = ctk.CTkEntry(frame_form, width=220, placeholder_text="(45) 99999-9999")
+        self.txt_fone.grid(row=1, column=1, padx=5, pady=5)
 
-        # Frame dos Botões
-        self.frame_botoes = ctk.CTkFrame(self, fg_color="transparent")
-        self.frame_botoes.pack(pady=15)
+        self.btn_salvar = ctk.CTkButton(frame_form, text="➕ Adicionar", fg_color="#2E7D32", hover_color="#1B5E20", command=self.salvar)
+        self.btn_salvar.grid(row=2, column=0, columnspan=2, pady=10)
 
-        self.btn_salvar = ctk.CTkButton(self.frame_botoes, text="💾 Salvar Contato", fg_color="#2E7D32", hover_color="#1B5E20", command=self.salvar)
-        self.btn_salvar.pack(side="left", padx=5)
+        self.btn_cancelar_edit = ctk.CTkButton(frame_form, text="Cancelar Edição", fg_color="#455A64", hover_color="#37474F", width=110, command=self.limpar_formulario)
 
-        self.btn_excluir = ctk.CTkButton(self.frame_botoes, text="🗑️ Excluir", fg_color="#C62828", hover_color="#B71C1C", command=self.excluir)
-        # O botão Excluir inicia oculto
+        # Lista de Contatos com Botões de Ação
+        ctk.CTkLabel(self, text="Contatos Cadastrados:", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=15, pady=(5, 2))
+        
+        self.frame_lista = ctk.CTkScrollableFrame(self, height=200)
+        self.frame_lista.pack(fill="both", expand=True, padx=15, pady=(0, 10))
 
-        centralizar_no_topo_da_principal(self, 380, 260)
+        self.carregar_lista_contatos()
+        centralizar_no_topo_da_principal(self, 460, 480)
 
-    def verificar_contato_existente(self, event=None):
-        nome = self.txt_nome.get().strip()
-        if not nome:
-            return
+    def carregar_lista_contatos(self):
+        for child in self.frame_lista.winfo_children():
+            child.destroy()
 
         schema = get_schema()
         try:
             conn = get_connection()
             cur = conn.cursor()
-            cur.execute(f"SELECT id, nome, telefone FROM {schema}.encarte_contatos WHERE ILIKE(nome) = ILIKE(%s)", (nome,))
-            res = cur.fetchone()
+            cur.execute(f"SELECT id, nome, telefone FROM {schema}.encarte_contatos ORDER BY nome")
+            contatos = cur.fetchall()
             conn.close()
 
-            if res:
-                self.contato_existente_id = res['id']
-                self.txt_nome.delete(0, 'end')
-                self.txt_nome.insert(0, res['nome'])
-                self.txt_fone.delete(0, 'end')
-                self.txt_fone.insert(0, res['telefone'])
+            if not contatos:
+                ctk.CTkLabel(self.frame_lista, text="Nenhum contato encontrado.", text_color="gray").pack(pady=10)
+                return
 
-                self.lbl_status.configure(text="⚠️ Contato existente! Altere o fone ou exclua.")
-                self.btn_salvar.configure(text="🔄 Atualizar Contato", fg_color="#1976D2", hover_color="#0D47A1")
-                self.btn_excluir.pack(side="left", padx=5)
-            else:
-                self.contato_existente_id = None
-                self.lbl_status.configure(text="")
-                self.btn_salvar.configure(text="💾 Salvar Contato", fg_color="#2E7D32", hover_color="#1B5E20")
-                self.btn_excluir.pack_forget()
+            for c in contatos:
+                row = ctk.CTkFrame(self.frame_lista)
+                row.pack(fill="x", pady=2, padx=2)
 
-        except Exception:
-            pass
+                lbl_texto = f"{c['nome']} - {c['telefone']}"
+                ctk.CTkLabel(row, text=lbl_texto, anchor="w").pack(side="left", fill="x", expand=True, padx=8)
+
+                btn_del = ctk.CTkButton(row, text="🗑️", width=32, height=28, fg_color="#C62828", hover_color="#B71C1C", command=lambda item=c: self.excluir(item))
+                btn_del.pack(side="right", padx=2)
+
+                btn_edit = ctk.CTkButton(row, text="✏️", width=32, height=28, fg_color="#1976D2", hover_color="#0D47A1", command=lambda item=c: self.preparar_edicao(item))
+                btn_edit.pack(side="right", padx=2)
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao listar contatos:\n{e}", parent=self)
+
+    def preparar_edicao(self, contato):
+        self.contato_edicao_id = contato['id']
+        self.txt_nome.delete(0, 'end')
+        self.txt_nome.insert(0, contato['nome'])
+        self.txt_fone.delete(0, 'end')
+        self.txt_fone.insert(0, contato['telefone'])
+
+        self.btn_salvar.configure(text="🔄 Atualizar", fg_color="#1976D2", hover_color="#0D47A1")
+        self.btn_cancelar_edit.grid(row=2, column=1, sticky="e", padx=5, pady=10)
+
+    def limpar_formulario(self):
+        self.contato_edicao_id = None
+        self.txt_nome.delete(0, 'end')
+        self.txt_fone.delete(0, 'end')
+        self.btn_salvar.configure(text="➕ Adicionar", fg_color="#2E7D32", hover_color="#1B5E20")
+        self.btn_cancelar_edit.grid_forget()
 
     def salvar(self):
         nome = self.txt_nome.get().strip()
@@ -273,13 +289,11 @@ class NovoContatoModal(ctk.CTkToplevel):
             conn = get_connection()
             cur = conn.cursor()
 
-            if self.contato_existente_id:
-                # Atualização do contato existente
-                cur.execute(f"UPDATE {schema}.encarte_contatos SET telefone = %s, nome = %s WHERE id = %s", (fone, nome, self.contato_existente_id))
+            if self.contato_edicao_id:
+                cur.execute(f"UPDATE {schema}.encarte_contatos SET nome = %s, telefone = %s WHERE id = %s", (nome, fone, self.contato_edicao_id))
                 conn.commit()
                 messagebox.showinfo("Sucesso", "Contato atualizado com sucesso!", parent=self)
             else:
-                # Verificação extra de duplicidade antes de inserir
                 cur.execute(f"SELECT id FROM {schema}.encarte_contatos WHERE ILIKE(nome) = ILIKE(%s)", (nome,))
                 if cur.fetchone():
                     messagebox.showwarning("Atenção", f"O contato '{nome}' já existe!", parent=self)
@@ -291,18 +305,15 @@ class NovoContatoModal(ctk.CTkToplevel):
                 messagebox.showinfo("Sucesso", "Contato cadastrado com sucesso!", parent=self)
 
             conn.close()
+            self.limpar_formulario()
+            self.carregar_lista_contatos()
             self.callback_sucesso(nome)
-            self.destroy()
 
         except Exception as e:
             messagebox.showerror("Erro", f"Erro ao salvar contato:\n{e}", parent=self)
 
-    def excluir(self):
-        if not self.contato_existente_id:
-            return
-
-        nome = self.txt_nome.get().strip()
-        confirma = messagebox.askyesno("Confirmar Exclusão", f"Deseja realmente excluir o contato '{nome}'?", parent=self)
+    def excluir(self, contato):
+        confirma = messagebox.askyesno("Confirmar Exclusão", f"Deseja realmente excluir '{contato['nome']}'?", parent=self)
         if not confirma:
             return
 
@@ -310,13 +321,14 @@ class NovoContatoModal(ctk.CTkToplevel):
         try:
             conn = get_connection()
             cur = conn.cursor()
-            cur.execute(f"DELETE FROM {schema}.encarte_contatos WHERE id = %s", (self.contato_existente_id,))
+            cur.execute(f"DELETE FROM {schema}.encarte_contatos WHERE id = %s", (contato['id'],))
             conn.commit()
             conn.close()
 
-            messagebox.showinfo("Sucesso", "Contato excluído com sucesso!", parent=self)
+            messagebox.showinfo("Sucesso", "Contato excluído!", parent=self)
+            self.limpar_formulario()
+            self.carregar_lista_contatos()
             self.callback_sucesso(None)
-            self.destroy()
         except Exception as e:
             messagebox.showerror("Erro", f"Erro ao excluir contato:\n{e}", parent=self)
 
