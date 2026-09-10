@@ -198,20 +198,67 @@ class NovoContatoModal(ctk.CTkToplevel):
     def __init__(self, parent, callback_sucesso):
         super().__init__(parent)
         self.callback_sucesso = callback_sucesso
-        self.title("Novo Contato")
+        self.contato_existente_id = None
+        self.title("Gerenciar Contato")
 
         ctk.CTkLabel(self, text="Nome:").pack(anchor="w", padx=20, pady=(15, 2))
         self.txt_nome = ctk.CTkEntry(self, width=320)
         self.txt_nome.pack(padx=20, pady=2)
+        # Eventos para consultar se o contato já existe ao perder o foco ou pressionar Enter
+        self.txt_nome.bind("<FocusOut>", self.verificar_contato_existente)
+        self.txt_nome.bind("<Return>", self.verificar_contato_existente)
 
         ctk.CTkLabel(self, text="Telefone:").pack(anchor="w", padx=20, pady=(10, 2))
         self.txt_fone = ctk.CTkEntry(self, width=320, placeholder_text="(45) 99999-9999")
         self.txt_fone.pack(padx=20, pady=2)
 
-        btn_salvar = ctk.CTkButton(self, text="💾 Salvar Contato", fg_color="#2E7D32", hover_color="#1B5E20", command=self.salvar)
-        btn_salvar.pack(pady=15)
+        # Rótulo para alertar sobre o contato encontrado
+        self.lbl_status = ctk.CTkLabel(self, text="", text_color="#FFB74D", font=ctk.CTkFont(size=12, weight="bold"))
+        self.lbl_status.pack(pady=(5, 0))
 
-        centralizar_no_topo_da_principal(self, 380, 210)
+        # Frame dos Botões
+        self.frame_botoes = ctk.CTkFrame(self, fg_color="transparent")
+        self.frame_botoes.pack(pady=15)
+
+        self.btn_salvar = ctk.CTkButton(self.frame_botoes, text="💾 Salvar Contato", fg_color="#2E7D32", hover_color="#1B5E20", command=self.salvar)
+        self.btn_salvar.pack(side="left", padx=5)
+
+        self.btn_excluir = ctk.CTkButton(self.frame_botoes, text="🗑️ Excluir", fg_color="#C62828", hover_color="#B71C1C", command=self.excluir)
+        # O botão Excluir inicia oculto
+
+        centralizar_no_topo_da_principal(self, 380, 260)
+
+    def verificar_contato_existente(self, event=None):
+        nome = self.txt_nome.get().strip()
+        if not nome:
+            return
+
+        schema = get_schema()
+        try:
+            conn = get_connection()
+            cur = conn.cursor()
+            cur.execute(f"SELECT id, nome, telefone FROM {schema}.encarte_contatos WHERE ILIKE(nome) = ILIKE(%s)", (nome,))
+            res = cur.fetchone()
+            conn.close()
+
+            if res:
+                self.contato_existente_id = res['id']
+                self.txt_nome.delete(0, 'end')
+                self.txt_nome.insert(0, res['nome'])
+                self.txt_fone.delete(0, 'end')
+                self.txt_fone.insert(0, res['telefone'])
+
+                self.lbl_status.configure(text="⚠️ Contato existente! Altere o fone ou exclua.")
+                self.btn_salvar.configure(text="🔄 Atualizar Contato", fg_color="#1976D2", hover_color="#0D47A1")
+                self.btn_excluir.pack(side="left", padx=5)
+            else:
+                self.contato_existente_id = None
+                self.lbl_status.configure(text="")
+                self.btn_salvar.configure(text="💾 Salvar Contato", fg_color="#2E7D32", hover_color="#1B5E20")
+                self.btn_excluir.pack_forget()
+
+        except Exception:
+            pass
 
     def salvar(self):
         nome = self.txt_nome.get().strip()
@@ -225,14 +272,53 @@ class NovoContatoModal(ctk.CTkToplevel):
         try:
             conn = get_connection()
             cur = conn.cursor()
-            cur.execute(f"INSERT INTO {schema}.encarte_contatos (nome, telefone) VALUES (%s, %s)", (nome, fone))
-            conn.commit()
+
+            if self.contato_existente_id:
+                # Atualização do contato existente
+                cur.execute(f"UPDATE {schema}.encarte_contatos SET telefone = %s, nome = %s WHERE id = %s", (fone, nome, self.contato_existente_id))
+                conn.commit()
+                messagebox.showinfo("Sucesso", "Contato atualizado com sucesso!", parent=self)
+            else:
+                # Verificação extra de duplicidade antes de inserir
+                cur.execute(f"SELECT id FROM {schema}.encarte_contatos WHERE ILIKE(nome) = ILIKE(%s)", (nome,))
+                if cur.fetchone():
+                    messagebox.showwarning("Atenção", f"O contato '{nome}' já existe!", parent=self)
+                    conn.close()
+                    return
+
+                cur.execute(f"INSERT INTO {schema}.encarte_contatos (nome, telefone) VALUES (%s, %s)", (nome, fone))
+                conn.commit()
+                messagebox.showinfo("Sucesso", "Contato cadastrado com sucesso!", parent=self)
+
             conn.close()
-            messagebox.showinfo("Sucesso", "Contato cadastrado!", parent=self)
             self.callback_sucesso(nome)
             self.destroy()
+
         except Exception as e:
             messagebox.showerror("Erro", f"Erro ao salvar contato:\n{e}", parent=self)
+
+    def excluir(self):
+        if not self.contato_existente_id:
+            return
+
+        nome = self.txt_nome.get().strip()
+        confirma = messagebox.askyesno("Confirmar Exclusão", f"Deseja realmente excluir o contato '{nome}'?", parent=self)
+        if not confirma:
+            return
+
+        schema = get_schema()
+        try:
+            conn = get_connection()
+            cur = conn.cursor()
+            cur.execute(f"DELETE FROM {schema}.encarte_contatos WHERE id = %s", (self.contato_existente_id,))
+            conn.commit()
+            conn.close()
+
+            messagebox.showinfo("Sucesso", "Contato excluído com sucesso!", parent=self)
+            self.callback_sucesso(None)
+            self.destroy()
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao excluir contato:\n{e}", parent=self)
 
 class GerarEncarteModal(ctk.CTkToplevel):
     def __init__(self, parent, encarte_id, encarte_titulo):
@@ -252,7 +338,7 @@ class GerarEncarteModal(ctk.CTkToplevel):
         self.cmb_contato = ctk.CTkComboBox(frame_ct, width=240, values=[])
         self.cmb_contato.grid(row=0, column=1, padx=5)
 
-        btn_novo_contato = ctk.CTkButton(frame_ct, text="➕ Novo", width=70, fg_color="#1976D2", hover_color="#0D47A1", command=self.abrir_novo_contato)
+        btn_novo_contato = ctk.CTkButton(frame_ct, text="➕ Novo / Gerenciar", width=120, fg_color="#1976D2", hover_color="#0D47A1", command=self.abrir_novo_contato)
         btn_novo_contato.grid(row=0, column=2, padx=5)
 
         frame_tb = ctk.CTkFrame(self, fg_color="transparent")
@@ -277,7 +363,7 @@ class GerarEncarteModal(ctk.CTkToplevel):
         btn_gerar.pack(pady=20)
 
         self.carregar_contatos()
-        centralizar_no_topo_da_principal(self, 480, 340)
+        centralizar_no_topo_da_principal(self, 520, 340)
 
     def carregar_contatos(self, selecionar_nome=None):
         schema = get_schema()
@@ -544,8 +630,9 @@ class ParametrosWindow(ctk.CTkToplevel):
 
         CREATE TABLE IF NOT EXISTS {schema}.encarte_contatos
         (
-            nome character varying(100),
-            telefone character varying(30)
+            id SERIAL PRIMARY KEY,
+            nome character varying(100) NOT NULL UNIQUE,
+            telefone character varying(30) NOT NULL
         );
 
         CREATE TABLE IF NOT EXISTS {schema}.encarte_parametros
@@ -881,10 +968,8 @@ class FormEncarteWindow(ctk.CTkToplevel):
             ctk.CTkLabel(f_row, text=f"Código: {item['codigo_prod']}", width=140, anchor="w", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=5)
             
             qtde_str = f"{item['qtde_oferta']:.2f}".rstrip('0').rstrip('.')
-            # Ajuste de contraste para o texto da quantidade: preto no Light, azul no Dark
             ctk.CTkLabel(f_row, text=f"A partir de {qtde_str} un.", width=140, anchor="w", text_color=("#000000", "#81D4FA")).pack(side="left", padx=5)
 
-            # Ajuste de contraste para o texto de preço
             cor_preco = ("#2E7D32", "#A5D6A7") if item['preco_oferta'] > 0 else ("#E65100", "#FFB74D")
             lbl_preco = f"R$ {item['preco_oferta']:.2f}" if item['preco_oferta'] > 0 else "Preço Atual (R$ 0.00)"
             ctk.CTkLabel(f_row, text=lbl_preco, width=160, text_color=cor_preco, font=ctk.CTkFont(weight="bold")).pack(side="left", padx=5)
@@ -1100,7 +1185,6 @@ class AppPrincipal(ctk.CTk):
 
                 vencido = data_vencimento < hoje
                 
-                # Aplicação da regra: Vermelho para vencidos e Preto (Modo Claro) / Branco (Modo Escuro) para os vigentes
                 if vencido:
                     cor_status = "#EF5350"
                 else:
