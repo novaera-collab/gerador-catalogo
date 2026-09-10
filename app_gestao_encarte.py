@@ -294,7 +294,7 @@ class NovoContatoModal(ctk.CTkToplevel):
                 conn.commit()
                 messagebox.showinfo("Sucesso", "Contato atualizado com sucesso!", parent=self)
             else:
-                cur.execute(f"SELECT id FROM {schema}.encarte_contatos WHERE ILIKE(nome) = ILIKE(%s)", (nome,))
+                cur.execute(f"SELECT id FROM {schema}.encarte_contatos WHERE nome ILIKE %s", (nome,))
                 if cur.fetchone():
                     messagebox.showwarning("Atenção", f"O contato '{nome}' já existe!", parent=self)
                     conn.close()
