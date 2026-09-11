@@ -1,8 +1,17 @@
 import sys
 import io
-# Força a saída padrão para UTF-8, evitando erros de charmap/emoji no Windows
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+# Correção segura para encoding UTF-8 em Windows/PyInstaller
+if sys.stdout is not None:
+    try:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    except AttributeError:
+        pass
+
+if sys.stderr is not None:
+    try:
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+    except AttributeError:
+        pass
 
 import csv
 import os
