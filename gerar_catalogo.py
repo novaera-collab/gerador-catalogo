@@ -1,272 +1,367 @@
 import sys
-import io
-# Correção segura para encoding UTF-8 em Windows/PyInstaller
-if sys.stdout is not None:
-    try:
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    except AttributeError:
-        pass
-
-if sys.stderr is not None:
-    try:
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
-    except AttributeError:
-        pass
-
-import csv
 import os
-from pathlib import Path
-from reportlab.pdfgen import canvas
-from reportlab.lib.units import cm
-from reportlab.lib.colors import HexColor, white, black, gray
-from PIL import Image as PILImage
+import csv
+import glob
+import traceback
+from PIL import Image, ImageDraw, ImageFont
 
-class GeradorEncarteJPG:
-    def __init__(self, csv_path):
-        self.csv_path = csv_path
-        
-        # Define automaticamente a pasta de saída na pasta Downloads do usuário
-        self.output_folder = str(Path.home() / "Downloads" / "encartes_oeste")
-        
-        self.config = {}
-        
-        # Tamanho ideal para WhatsApp Feed (4:5 ratio) - Alta resolução
-        self.LARGURA = 1080
-        self.ALTURA = 1350
-        
-        # Cria a pasta se ela não existir
-        os.makedirs(self.output_folder, exist_ok=True)
-        print(f"[INFO] As imagens serão salvas em: {self.output_folder}")
+def hex_to_rgb(hex_str, default=(27, 94, 32)):
+    if not hex_str or not hex_str.startswith("#"):
+        return default
+    hex_str = hex_str.lstrip('#')
+    if len(hex_str) != 6:
+        return default
+    try:
+        return tuple(int(hex_str[i:i+2], 16) for i in (0, 2, 4))
+    except ValueError:
+        return default
 
-    def carregar_configuracoes(self):
-        """Lê as configurações das primeiras linhas do CSV"""
-        with open(self.csv_path, 'r', encoding='utf-8') as f:
-            for i, line in enumerate(f):
-                if ';' not in line or i > 20: 
-                    break
-                parts = line.strip().split(';')
-                if len(parts) == 2:
-                    self.config[parts[0].strip()] = parts[1].strip()
+def carregar_e_ajustar_imagem(caminho, largura_max, altura_max):
+    if not caminho or not os.path.exists(caminho):
+        return None
+    try:
+        img = Image.open(caminho).convert("RGBA")
+        img.thumbnail((largura_max, altura_max), Image.Resampling.LANCZOS)
+        
+        fundo_branco = Image.new("RGBA", img.size, (255, 255, 255, 255))
+        fundo_branco.paste(img, (0, 0), img)
+        return fundo_branco.convert("RGB")
+    except Exception:
+        return None
 
-    def carregar_produtos(self):
-        """Separa produtos em Destaques (S) e Normais (N)"""
-        destaques, normais = [], []
-        with open(self.csv_path, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f, delimiter=';')
-            for row in reader:
-                # Ignora linhas que não são produtos válidos
-                if 'codigo' not in row or not row['codigo'].strip().isdigit(): 
-                    continue
-                    
-                produto = {k: v.strip() for k, v in row.items()}
-                
-                if produto.get('destaque', 'N').upper() == 'S':
-                    destaques.append(produto)
-                else:
-                    normais.append(produto)
-                    
-        # Limita a 3 destaques por página para manter o layout limpo
-        return destaques[:3], normais
+def criar_imagem_mulher_farmaceutica():
+    img = Image.new("RGBA", (220, 250), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    draw.ellipse([60, 20, 160, 120], fill=(240, 210, 190))
+    draw.rectangle([40, 110, 180, 250], fill=(255, 255, 255))
+    draw.polygon([(40, 110), (110, 170), (180, 110)], fill=(200, 230, 220))
+    return img
 
-    def desenhar_card_destaque(self, c, x, y, largura, altura, produto):
-        """Desenha um card grande de produto em destaque"""
-        cor_tarja = HexColor(self.config.get('cor_grid_preco', '#000000'))
+def limpar_jpgs_antigos(caminho_saida_base):
+    try:
+        pasta_dest = os.path.dirname(caminho_saida_base)
+        if not pasta_dest:
+            pasta_dest = os.getcwd()
+            
+        nome_base = os.path.splitext(os.path.basename(caminho_saida_base))[0]
+        if '_' in nome_base and nome_base.rsplit('_', 1)[1].isdigit():
+            nome_base = nome_base.rsplit('_', 1)[0]
+
+        padrao_busca = os.path.join(pasta_dest, f"{nome_base}*.JPG")
+        padrao_busca_lower = os.path.join(pasta_dest, f"{nome_base}*.jpg")
         
-        # Fundo branco com borda suave
-        c.setFillColor(white)
-        c.setStrokeColor(HexColor('#CCCCCC'))
-        c.rect(x, y, largura, altura, fill=1, stroke=1)
-        
-        # Foto centralizada na parte superior
-        foto_y = y + altura - 350
-        foto_w, foto_h = 300, 300
-        foto_x = x + (largura - foto_w) / 2
-        
-        if os.path.exists(produto['foto']):
+        arquivos = glob.glob(padrao_busca) + glob.glob(padrao_busca_lower)
+        for arq in set(arquivos):
             try:
-                c.drawImage(produto['foto'], foto_x, foto_y, foto_w, foto_h, preserveAspectRatio=True)
-            except Exception: 
+                os.remove(arq)
+            except Exception:
                 pass
-        else:
-            # Placeholder cinza se a foto não existir
-            c.setFillColor(gray)
-            c.rect(foto_x, foto_y, foto_w, foto_h, fill=1)
-            
-        # Código e Marca no topo do card
-        c.setFont("Helvetica-Bold", 20)
-        c.setFillColor(black)
-        c.drawString(x + 30, y + altura - 60, f"CÓD: {produto['codigo']}")
-        
-        c.setFont("Helvetica", 18)
-        c.setFillColor(gray)
-        c.drawRightString(x + largura - 30, y + altura - 60, produto['marca'])
-        
-        # Descrição do produto
-        c.setFont("Helvetica-Bold", 22)
-        c.setFillColor(black)
-        desc = produto['descricao'][:60] + "..." if len(produto['descricao']) > 60 else produto['descricao']
-        c.drawString(x + 30, y + 250, desc)
-        
-        # Tarja de Preço arredondada
-        tarja_h = 90
-        c.setFillColor(cor_tarja)
-        c.roundRect(x + 20, y + 40, largura - 40, tarja_h, 15, fill=1)
-        
-        preco_limpo = produto['preco'].replace('R$', '').strip()
-        c.setFont("Helvetica-Bold", 42)
-        c.setFillColor(white)
-        c.drawCentredString(x + largura/2, y + 40 + tarja_h/2 - 12, f"POR {preco_limpo}")
+    except Exception:
+        pass
 
-    def desenhar_card_normal(self, c, x, y, largura, altura, produto):
-        """Desenha card menor para produtos da grade secundária"""
-        cor_tarja = HexColor(self.config.get('cor_grid_tarja', '#70AA87'))
-        
-        c.setFillColor(white)
-        c.setStrokeColor(HexColor('#DDDDDD'))
-        c.rect(x, y, largura, altura, fill=1, stroke=1)
-        
-        # Foto pequena
-        foto_w, foto_h = 180, 180
-        foto_x = x + (largura - foto_w) / 2
-        foto_y = y + altura - 120
-        
-        if os.path.exists(produto['foto']):
-            try:
-                c.drawImage(produto['foto'], foto_x, foto_y, foto_w, foto_h, preserveAspectRatio=True)
-            except Exception: 
-                pass
-            
-        # Descrição curta
-        c.setFont("Helvetica", 16)
-        c.setFillColor(black)
-        desc = produto['descricao'][:40] + "..." if len(produto['descricao']) > 40 else produto['descricao']
-        c.drawString(x + 15, y + 200, desc)
-        
-        # Tarja de preço menor
-        tarja_h = 55
-        c.setFillColor(cor_tarja)
-        c.roundRect(x + 10, y + 20, largura - 20, tarja_h, 8, fill=1)
-        
-        preco_limpo = produto['preco'].replace('R$', '').strip()
-        c.setFont("Helvetica-Bold", 24)
-        c.setFillColor(white)
-        c.drawCentredString(x + largura/2, y + 20 + tarja_h/2 - 6, preco_limpo)
+def renderizar_catalogo(config, produtos, caminho_saida_base):
+    # Separar produtos por Destaque (S vs N)
+    prods_destaque = [p for p in produtos if str(p.get('destaque', '')).strip().upper() == 'S']
+    prods_normais = [p for p in produtos if str(p.get('destaque', '')).strip().upper() != 'S']
 
-    def desenhar_cabecalho(self, c):
-        """Desenha a faixa superior verde com logo e título"""
-        cor_header = HexColor(self.config.get('cor_tit_rodape', '#1B5E20'))
-        c.setFillColor(cor_header)
-        c.rect(0, self.ALTURA - 200, self.LARGURA, 200, fill=1)
-        
-        # Logo à esquerda
-        logo_path = self.config.get('cabecalho_logo', '')
-        if os.path.exists(logo_path):
-            try:
-                c.drawImage(logo_path, 40, self.ALTURA - 160, 140, 140, preserveAspectRatio=True)
-            except Exception: 
-                pass
-            
-        # Título centralizado
-        c.setFont("Helvetica-Bold", 48)
-        c.setFillColor(white)
-        titulo = self.config.get('titulo', 'OFERTAS DA SEMANA').upper()
-        c.drawCentredString(self.LARGURA / 2, self.ALTURA - 100, titulo)
-        
-        # Site à direita
-        c.setFont("Helvetica", 22)
-        site = self.config.get('cabecalho_site', '')
-        c.drawRightString(self.LARGURA - 40, self.ALTURA - 100, site)
+    # Se nenhum produto tiver 'S', pega atÃ© os 3 primeiros como destaque por padrÃ£o
+    if not prods_destaque and len(produtos) > 0:
+        prods_destaque = produtos[:min(3, len(produtos))]
+        prods_normais = produtos[min(3, len(produtos)):]
 
-    def desenhar_rodape(self, c):
-        """Desenha a faixa inferior com contatos e validade"""
-        cor_footer = HexColor(self.config.get('cor_tit_rodape', '#1B5E20'))
-        rodape_h = 140
-        c.setFillColor(cor_footer)
-        c.rect(0, 0, self.LARGURA, rodape_h, fill=1)
-        
-        contato = self.config.get('rodape_contato', '')
-        fone = self.config.get('rodape_fone', '')
-        validade = self.config.get('rodape_validade', '')
-        tabela = self.config.get('rodape_tabela', '')
-        
-        texto_principal = f"{contato} | {fone}"
-        c.setFont("Helvetica-Bold", 24)
-        c.setFillColor(white)
-        c.drawCentredString(self.LARGURA / 2, rodape_h - 40, texto_principal)
-        
-        subtexto = f"{validade} | {tabela}"
-        c.setFont("Helvetica", 16)
-        c.drawCentredString(self.LARGURA / 2, rodape_h - 75, subtexto)
+    LARGURA_TOTAL = 1600
+    MARGEM_LATERAL = 40
+    MARGEM_TOPO_CONTEUDO = 300
+    ESPACO_HORIZ = 20
+    ESPACO_VERT = 20
+    ALTURA_CABECALHO = 270
+    ALTURA_RODAPE = 160
 
-    def gerar_pagina(self, destaques, normais, pagina_num):
-        """Monta e salva uma única página JPG"""
-        nome_arquivo = os.path.join(self.output_folder, f"encarte_pag{pagina_num}.jpg")
-        c = canvas.Canvas(nome_arquivo, pagesize=(self.LARGURA, self.ALTURA))
-        
-        # Fundo branco base
-        c.setFillColor(white)
-        c.rect(0, 0, self.LARGURA, self.ALTURA, fill=1)
-        
-        self.desenhar_cabecalho(c)
-        
-        # --- Área de Destaques (Topo) ---
-        y_destaque = self.ALTURA - 280
-        card_largura = 340
-        espacamento = 30
-        # Centraliza horizontalmente os 3 cards
-        x_inicio = (self.LARGURA - (3 * card_largura + 2 * espacamento)) / 2
-        
-        for i, prod in enumerate(destaques):
-            x = x_inicio + i * (card_largura + espacamento)
-            self.desenhar_card_destaque(c, x, y_destaque, card_largura, 550, prod)
-            
-        # --- Área de Produtos Normais (Grid 3x3 abaixo) ---
-        y_normal_start = y_destaque - 600
-        card_norm_largura = 340
-        card_norm_altura = 350
-        
-        idx = 0
-        # Gera até 3 linhas de 3 produtos (9 produtos por página secundária)
-        for row in range(3):
-            for col in range(3):
-                if idx < len(normais):
-                    x = x_inicio + col * (card_norm_largura + espacamento)
-                    y = y_normal_start - row * (card_norm_altura + 30)
-                    self.desenhar_card_normal(c, x, y, card_norm_largura, card_norm_altura, normais[idx])
-                    idx += 1
-                    
-        self.desenhar_rodape(c)
-        c.save()
-        print(f"[OK] Página {pagina_num} gerada: {nome_arquivo}")
+    cor_topo_rodape  = hex_to_rgb(config.get('cor_tit_rodape'), (27, 94, 32))
+    cor_tarja_bg     = hex_to_rgb(config.get('cor_grid_tarja'), (112, 170, 135))
+    cor_preco_texto  = hex_to_rgb(config.get('cor_grid_preco'), (0, 0, 0))
 
-    def gerar(self):
-        """Ponto de entrada principal do gerador"""
-        if not os.path.exists(self.csv_path):
-            print(f"[ERRO] Arquivo CSV não encontrado: {self.csv_path}")
-            return
+    try:
+        font_titulo_encarte = ImageFont.truetype("arialbd.ttf", 52)
+        font_sub_titulo     = ImageFont.truetype("arialbd.ttf", 28)
+        font_site           = ImageFont.truetype("arial.ttf", 22)
+        font_cod_bold       = ImageFont.truetype("arialbd.ttf", 22)
+        font_desc_bold      = ImageFont.truetype("arialbd.ttf", 22)
+        font_marca          = ImageFont.truetype("arialbd.ttf", 18)
+        font_preco_destaque = ImageFont.truetype("arialbd.ttf", 52)
+        font_preco_normal   = ImageFont.truetype("arialbd.ttf", 40)
+        font_rod_destaque   = ImageFont.truetype("arialbd.ttf", 28)
+        font_rod_validade   = ImageFont.truetype("arial.ttf", 20)
+        font_rod_tabela     = ImageFont.truetype("arial.ttf", 18)
+    except IOError:
+        font_titulo_encarte = font_sub_titulo = font_site = font_cod_bold = font_desc_bold = font_marca = font_preco_destaque = font_preco_normal = font_rod_destaque = font_rod_validade = font_rod_tabela = ImageFont.load_default()
 
-        self.carregar_configuracoes()
-        destaques, normais = self.carregar_produtos()
-        
-        # A primeira página sempre tem os destaques + primeiros 9 normais
-        produtos_por_pagina = 9
-        total_paginas = max(1, (len(normais) + produtos_por_pagina - 1) // produtos_por_pagina)
-        
-        for p in range(total_paginas):
-            inicio = p * produtos_por_pagina
-            fim = inicio + produtos_por_pagina
-            
-            # Destaques só aparecem na primeira página
-            destaques_pagina = destaques if p == 0 else []
-            
-            self.gerar_pagina(destaques_pagina, normais[inicio:fim], p + 1)
-            
-        print("\n[SUCESSO] Todos os encartes foram gerados na pasta 'encartes_oeste' dentro dos seus Downloads!")
-
-
-# === EXECUÇÃO ===
-if __name__ == "__main__":
-    CSV_PATH = "encarte_agosto_2026.csv" 
+    larg_util = LARGURA_TOTAL - (MARGEM_LATERAL * 2)
     
-    gerador = GeradorEncarteJPG(CSV_PATH)
-    gerador.gerar()
+    # Grid Destaque: 3 produtos no topo, maior destaque
+    cols_destaque = 3
+    larg_card_dest = (larg_util - (ESPACO_HORIZ * 2)) // cols_destaque
+    alt_card_dest = 520
+
+    # Grid Normal: 4 colunas abaixo
+    cols_normal = 4
+    larg_card_norm = (larg_util - (ESPACO_HORIZ * (cols_normal - 1))) // cols_normal
+    alt_card_norm = 390
+
+    if not caminho_saida_base:
+        caminho_saida_base = config.get('saida_jpg', 'CATALOGO.JPG')
+
+    pasta_dest = os.path.dirname(caminho_saida_base)
+    if pasta_dest and not os.path.exists(pasta_dest):
+        os.makedirs(pasta_dest, exist_ok=True)
+
+    limpar_jpgs_antigos(caminho_saida_base)
+
+    nome_base, ext = os.path.splitext(caminho_saida_base)
+    if not ext:
+        ext = ".JPG"
+
+    # Fila de itens para distribuir em pÃ¡ginas
+    queue_dest = list(prods_destaque)
+    queue_norm = list(prods_normais)
+
+    pag_num = 1
+    MAX_ALTURA_PAGINA = 2400
+
+    while queue_dest or queue_norm or pag_num == 1:
+        current_dest = []
+        if pag_num == 1 and queue_dest:
+            current_dest = queue_dest[:3]
+            queue_dest = queue_dest[3:]
+
+        current_norm = []
+        alt_disponivel = MAX_ALTURA_PAGINA - MARGEM_TOPO_CONTEUDO - ALTURA_RODAPE
+        if current_dest:
+            alt_disponivel -= (alt_card_dest + ESPACO_VERT)
+
+        max_rows_norm = max(1, alt_disponivel // (alt_card_norm + ESPACO_VERT))
+        max_items_page = max_rows_norm * cols_normal
+
+        if queue_norm:
+            current_norm = queue_norm[:max_items_page]
+            queue_norm = queue_norm[max_items_page:]
+
+        # CÃ¡lculo de Altura DinÃ¢mica da PÃ¡gina (para nÃ£o ter espaÃ§o em branco excessivo quando hÃ¡ poucos produtos)
+        num_rows_norm = (len(current_norm) + cols_normal - 1) // cols_normal if current_norm else 0
+        conteudo_h = (alt_card_dest + ESPACO_VERT if current_dest else 0) + (num_rows_norm * (alt_card_norm + ESPACO_VERT))
+        
+        ALTURA_TOTAL = MARGEM_TOPO_CONTEUDO + conteudo_h + ALTURA_RODAPE + 10
+        ALTURA_TOTAL = max(1100, ALTURA_TOTAL) # Altura mÃ­nima proporcional
+
+        img = Image.new("RGB", (LARGURA_TOTAL, ALTURA_TOTAL), color="#FFFFFF")
+        draw = ImageDraw.Draw(img)
+
+        # 1. CABEÃ‡ALHO (Estilo Encarte Farma com Banner Verde)
+        draw.rectangle([0, 0, LARGURA_TOTAL, ALTURA_CABECALHO], fill=cor_topo_rodape)
+        draw.rectangle([0, ALTURA_CABECALHO - 12, LARGURA_TOTAL, ALTURA_CABECALHO], fill=cor_tarja_bg)
+
+        # Logo no lado esquerdo
+        logo_img = carregar_e_ajustar_imagem(config.get('cabecalho_logo'), 350, 180)
+        if logo_img:
+            img.paste(logo_img, (MARGEM_LATERAL + 10, (ALTURA_CABECALHO - logo_img.height) // 2 - 10))
+
+        # TÃ­tulo Central "ENCARTE" + SubtÃ­tulo
+        titulo_principal = str(config.get('titulo', 'SUPLEMENTOS NUTRICIONAIS')).upper()
+        
+        # InsÃ­gnia / Banner ENCARTE
+        draw.rounded_rectangle([LARGURA_TOTAL // 2 - 200, 20, LARGURA_TOTAL // 2 + 200, 90], radius=15, fill="#FFFFFF")
+        draw.text((LARGURA_TOTAL // 2, 55), "E N C A R T E", fill=cor_topo_rodape, font=font_titulo_encarte, anchor="mm")
+
+        # SubtÃ­tulo
+        draw.text((LARGURA_TOTAL // 2, 130), titulo_principal, fill="#FFFFFF", font=font_sub_titulo, anchor="mm")
+        
+        site_str = str(config.get('cabecalho_site', '')).strip()
+        if site_str:
+            draw.text((LARGURA_TOTAL // 2, 180), site_str, fill="#E0E0E0", font=font_site, anchor="mm")
+
+        # Imagem da Mulher / FarmacÃªutica no lado direito
+        mulher_path = config.get('cabecalho_mulher', r'f:\unico\logo\mulher.jpg')
+        mulher_img = carregar_e_ajustar_imagem(mulher_path, 220, 250)
+        if not mulher_img:
+            mulher_img = criar_imagem_mulher_farmaceutica()
+        if mulher_img:
+            px = LARGURA_TOTAL - MARGEM_LATERAL - 220
+            py = ALTURA_CABECALHO - mulher_img.height
+            img.paste(mulher_img, (px, py))
+
+        # 2. SEÃ‡ÃƒO DE DESTAQUES (Topo - 3 Produtos Maiores)
+        y_cursor = MARGEM_TOPO_CONTEUDO
+        if current_dest:
+            for idx, prod in enumerate(current_dest):
+                x = MARGEM_LATERAL + idx * (larg_card_dest + ESPACO_HORIZ)
+                
+                # Card Background
+                draw.rounded_rectangle([x, y_cursor, x + larg_card_dest, y_cursor + alt_card_dest], radius=12, outline=cor_tarja_bg, fill="#FFFFFF", width=3)
+                
+                # Tag Destaque
+                draw.rounded_rectangle([x + 12, y_cursor + 12, x + 130, y_cursor + 42], radius=6, fill="#D32F2F")
+                draw.text((x + 71, y_cursor + 27), "DESTAQUE", fill="#FFFFFF", font=font_marca, anchor="mm")
+
+                # CÃ³d e Marca
+                cod_str = str(prod.get('codigo', '')).zfill(5)
+                marca_str = str(prod.get('marca', '')).upper()
+                draw.text((x + larg_card_dest - 15, y_cursor + 27), f"CÃ“D: {cod_str}", fill="#555555", font=font_cod_bold, anchor="rm")
+
+                # Foto
+                area_foto_x, area_foto_y = x + 15, y_cursor + 50
+                area_foto_w, area_foto_h = larg_card_dest - 30, 260
+                foto_prod = carregar_e_ajustar_imagem(prod.get('foto'), area_foto_w, area_foto_h)
+                if foto_prod:
+                    px = area_foto_x + (area_foto_w - foto_prod.width) // 2
+                    py = area_foto_y + (area_foto_h - foto_prod.height) // 2
+                    img.paste(foto_prod, (px, py))
+                else:
+                    draw.text((area_foto_x + area_foto_w//2, area_foto_y + area_foto_h//2), "[ SEM FOTO ]", fill="#CCCCCC", font=font_cod_bold, anchor="mm")
+
+                # DescriÃ§Ã£o
+                desc = str(prod.get('descricao', ''))[:32]
+                draw.text((x + larg_card_dest//2, y_cursor + 335), desc.upper(), fill="#000000", font=font_desc_bold, anchor="mm")
+                if marca_str:
+                    draw.text((x + larg_card_dest//2, y_cursor + 365), marca_str, fill="#777777", font=font_marca, anchor="mm")
+
+                # Tarja de PreÃ§o
+                tarja_y1 = y_cursor + 398
+                tarja_y2 = y_cursor + alt_card_dest - 12
+                draw.rounded_rectangle([x + 10, tarja_y1, x + larg_card_dest - 10, tarja_y2], radius=10, fill=cor_tarja_bg)
+                
+                preco_fmt = str(prod.get('preco', '')).strip()
+                draw.text((x + larg_card_dest//2, tarja_y1 + (tarja_y2 - tarja_y1)//2), preco_fmt, fill=cor_preco_texto, font=font_preco_destaque, anchor="mm")
+
+            y_cursor += alt_card_dest + ESPACO_VERT
+
+        # 3. SEÃ‡ÃƒO DE PRODUTOS NORMAIS (Grid 4 colunas)
+        if current_norm:
+            for idx, prod in enumerate(current_norm):
+                col = idx % cols_normal
+                row = idx // cols_normal
+
+                x = MARGEM_LATERAL + col * (larg_card_norm + ESPACO_HORIZ)
+                y = y_cursor + row * (alt_card_norm + ESPACO_VERT)
+
+                # Card
+                draw.rounded_rectangle([x, y, x + larg_card_norm, y + alt_card_norm], radius=10, outline="#D0D0D0", fill="#FFFFFF", width=2)
+
+                # CÃ³d
+                cod_str = str(prod.get('codigo', '')).zfill(5)
+                draw.text((x + 12, y + 15), f"CÃ“D: {cod_str}", fill="#666666", font=font_marca)
+
+                # Foto
+                area_foto_x, area_foto_y = x + 10, y + 38
+                area_foto_w, area_foto_h = larg_card_norm - 20, 190
+                foto_prod = carregar_e_ajustar_imagem(prod.get('foto'), area_foto_w, area_foto_h)
+                if foto_prod:
+                    px = area_foto_x + (area_foto_w - foto_prod.width) // 2
+                    py = area_foto_y + (area_foto_h - foto_prod.height) // 2
+                    img.paste(foto_prod, (px, py))
+                else:
+                    draw.text((area_foto_x + area_foto_w//2, area_foto_y + area_foto_h//2), "[ SEM FOTO ]", fill="#CCCCCC", font=font_marca, anchor="mm")
+
+                # DescriÃ§Ã£o
+                desc = str(prod.get('descricao', ''))[:26]
+                draw.text((x + larg_card_norm//2, y + 242), desc.upper(), fill="#000000", font=font_desc_bold, anchor="mm")
+
+                # Tarja PreÃ§o
+                tarja_y1 = y + 280
+                tarja_y2 = y + alt_card_norm - 10
+                draw.rounded_rectangle([x + 8, tarja_y1, x + larg_card_norm - 8, tarja_y2], radius=8, fill=cor_tarja_bg)
+
+                preco_fmt = str(prod.get('preco', '')).strip()
+                draw.text((x + larg_card_norm//2, tarja_y1 + (tarja_y2 - tarja_y1)//2), preco_fmt, fill=cor_preco_texto, font=font_preco_normal, anchor="mm")
+
+        # 4. RODAPÃ‰
+        y_rodape = ALTURA_TOTAL - ALTURA_RODAPE
+        draw.rectangle([0, y_rodape, LARGURA_TOTAL, ALTURA_TOTAL], fill=cor_topo_rodape)
+
+        contato_str = str(config.get('rodape_contato', '')).strip()
+        fone_str = str(config.get('rodape_fone', '')).strip()
+        ico_whats = carregar_e_ajustar_imagem(config.get('rodape_logo_fone'), 40, 40)
+
+        texto_contato = f"{contato_str}   |" if contato_str else ""
+        texto_fone = f"{fone_str}" if fone_str else ""
+
+        bbox_c = draw.textbbox((0, 0), texto_contato, font=font_rod_destaque) if texto_contato else (0,0,0,0)
+        bbox_f = draw.textbbox((0, 0), texto_fone, font=font_rod_destaque) if texto_fone else (0,0,0,0)
+
+        larg_contato = bbox_c[2] - bbox_c[0]
+        larg_fone    = bbox_f[2] - bbox_f[0]
+        larg_ico     = (ico_whats.width + 15) if ico_whats else 0
+
+        largura_total_l1 = larg_contato + larg_ico + larg_fone
+        x_cursor_r = (LARGURA_TOTAL - largura_total_l1) // 2
+        y_l1 = y_rodape + 20
+
+        if texto_contato:
+            draw.text((x_cursor_r, y_l1), texto_contato, fill="#FFFFFF", font=font_rod_destaque)
+            x_cursor_r += larg_contato + 15
+
+        if ico_whats:
+            img.paste(ico_whats, (x_cursor_r, y_l1 - 2))
+            x_cursor_r += larg_ico
+
+        if texto_fone:
+            draw.text((x_cursor_r, y_l1), texto_fone, fill="#FFFFFF", font=font_rod_destaque)
+
+        validade_str = str(config.get('rodape_validade', '')).strip()
+        if validade_str:
+            draw.text((LARGURA_TOTAL // 2, y_rodape + 75), f"PreÃ§os vÃ¡lidos no perÃ­odo: {validade_str}", fill="#E0E0E0", font=font_rod_validade, anchor="mm")
+
+        tabela_str = str(config.get('rodape_tabela', '')).strip()
+        if tabela_str:
+            draw.text((LARGURA_TOTAL // 2, y_rodape + 115), tabela_str, fill="#CCCCCC", font=font_rod_tabela, anchor="mm")
+
+        # Salvar arquivo JPG
+        if pag_num > 1:
+            caminho_final = f"{nome_base}_{pag_num}{ext}"
+        else:
+            caminho_final = f"{nome_base}{ext}"
+
+        img.save(caminho_final, format="JPEG", quality=98)
+        pag_num += 1
+
+if __name__ == "__main__":
+    try:
+        if len(sys.argv) >= 2:
+            arquivo_csv = sys.argv[1]
+            saida_cli = sys.argv[2] if len(sys.argv) >= 3 else None
+
+            config = {}
+            produtos = []
+
+            if os.path.exists(arquivo_csv):
+                with open(arquivo_csv, mode='r', encoding='utf-8-sig') as f:
+                    linhas = f.readlines()
+                    lendo_produtos = False
+                    linhas_produtos = []
+
+                    for linha in linhas:
+                        linha_str = linha.strip()
+                        if not linha_str:
+                            continue
+
+                        if linha_str.lower().startswith('codigo;'):
+                            lendo_produtos = True
+                            linhas_produtos.append(linha_str)
+                            continue
+
+                        if not lendo_produtos:
+                            partes = linha_str.split(';')
+                            if len(partes) >= 2:
+                                config[partes[0].strip()] = partes[1].strip()
+                        else:
+                            linhas_produtos.append(linha_str)
+
+                    if linhas_produtos:
+                        reader = csv.DictReader(linhas_produtos, delimiter=';')
+                        for row in reader:
+                            produtos.append(row)
+
+            renderizar_catalogo(config, produtos, saida_cli)
+
+    except Exception as e:
+        with open("erro_log.txt", "w", encoding="utf-8") as f_err:
+            f_err.write(traceback.format_exc())
