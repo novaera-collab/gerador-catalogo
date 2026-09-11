@@ -1,58 +1,40 @@
-name: Build and Deploy Catalog Generator
+name: Build Executables
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    branches: [ "main" ]
 
 jobs:
   build:
-    runs-on: windows-latest  # Alterado para Windows pois PyInstaller gera .exe
-    
+    runs-on: windows-latest
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-          
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install reportlab>=4.0.0 Pillow>=10.0.0 pyinstaller customtkinter tkcalendar babel psycopg2-binary
-          
-      # 1. Primeiro geramos as imagens JPG (precisa das libs instaladas)
-      - name: Run catalog generator
-        run: python gerar_catalogo.py
-        
-      # 2. Depois compilamos os executáveis
-      - name: Build GERAR_CATALOGO
-        run: |
-          pyinstaller --noconsole --onefile --clean --exclude-module customtkinter --exclude-module psycopg2 --exclude-module psycopg2-binary --exclude-module tkcalendar --exclude-module babel --name GERAR_CATALOGO gerar_catalogo.py
+    - uses: actions/checkout@v4
 
-      - name: Build VISUALIZAR_CATALOGO
-        run: |
-          pyinstaller --noconsole --onefile --clean --exclude-module customtkinter --exclude-module psycopg2 --exclude-module psycopg2-binary --exclude-module tkcalendar --exclude-module babel --name VISUALIZAR_CATALOGO visualizar_catalogo.py
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
 
-      - name: Build APP_GESTAO_ENCARTE
-        run: |
-          pyinstaller --noconsole --onefile --clean --collect-all customtkinter --collect-all tkcalendar --collect-all babel --name APP_GESTAO_ENCARTE app_gestao_encarte.py
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install customtkinter psycopg2-binary pillow pywin32 pyinstaller tkcalendar babel
 
-      # 3. Upload separado para Executáveis
-      - name: Upload Executables
-        uses: actions/upload-artifact@v4
-        with:
-          name: Executaveis_Encarte
-          path: dist/*.exe
-          retention-days: 7
+    - name: Build GERAR_CATALOGO
+      run: |
+        pyinstaller --noconsole --onefile --clean --exclude-module customtkinter --exclude-module psycopg2 --exclude-module psycopg2-binary --exclude-module tkcalendar --exclude-module babel --name GERAR_CATALOGO gerar_catalogo.py
 
-      # 4. Upload separado para Imagens JPG
-      - name: Upload generated images
-        uses: actions/upload-artifact@v4
-        with:
-          name: encartes-jpg
-          path: encartes_jpg/*.jpg
-          retention-days: 7
+    - name: Build VISUALIZAR_CATALOGO
+      run: |
+        pyinstaller --noconsole --onefile --clean --exclude-module customtkinter --exclude-module psycopg2 --exclude-module psycopg2-binary --exclude-module tkcalendar --exclude-module babel --name VISUALIZAR_CATALOGO visualizar_catalogo.py
+
+    - name: Build APP_GESTAO_ENCARTE
+      run: |
+        pyinstaller --noconsole --onefile --clean --collect-all customtkinter --collect-all tkcalendar --collect-all babel --name APP_GESTAO_ENCARTE app_gestao_encarte.py
+
+    - name: Upload Executables
+      uses: actions/upload-artifact@v4
+      with:
+        name: Executaveis_Encarte
+        path: dist/*.exe
