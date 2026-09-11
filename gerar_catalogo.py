@@ -15,22 +15,28 @@ if sys.stderr is not None:
 
 import csv
 import os
+from pathlib import Path
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import cm
 from reportlab.lib.colors import HexColor, white, black, gray
 from PIL import Image as PILImage
 
 class GeradorEncarteJPG:
-    def __init__(self, csv_path, output_folder="encartes_jpg"):
+    def __init__(self, csv_path):
         self.csv_path = csv_path
-        self.output_folder = output_folder
+        
+        # Define automaticamente a pasta de saída na pasta Downloads do usuário
+        self.output_folder = str(Path.home() / "Downloads" / "encartes_oeste")
+        
         self.config = {}
         
         # Tamanho ideal para WhatsApp Feed (4:5 ratio) - Alta resolução
         self.LARGURA = 1080
         self.ALTURA = 1350
         
-        os.makedirs(output_folder, exist_ok=True)
+        # Cria a pasta se ela não existir
+        os.makedirs(self.output_folder, exist_ok=True)
+        print(f"[INFO] As imagens serão salvas em: {self.output_folder}")
 
     def carregar_configuracoes(self):
         """Lê as configurações das primeiras linhas do CSV"""
@@ -255,7 +261,7 @@ class GeradorEncarteJPG:
             
             self.gerar_pagina(destaques_pagina, normais[inicio:fim], p + 1)
             
-        print("\n[SUCESSO] Todos os encartes foram gerados na pasta 'encartes_jpg'!")
+        print("\n[SUCESSO] Todos os encartes foram gerados na pasta 'encartes_oeste' dentro dos seus Downloads!")
 
 
 # === EXECUÇÃO ===
