@@ -43,7 +43,9 @@ def carregar_e_ajustar_imagem(caminho, largura_max, altura_max, fundo_cor=None):
 def gerar_qrcode(texto_url, tamanho_px=110):
     if not texto_url:
         return None
-    url_completa = texto_url if texto_url.startswith(("http://", "https://")) else "https://" + texto_url
+    url_limpa = str(texto_url).strip()
+    url_completa = url_limpa if url_limpa.startswith(("http://", "https://")) else "https://" + url_limpa
+    
     if HAS_QRCODE:
         try:
             qr = qrcode.QRCode(
@@ -59,7 +61,7 @@ def gerar_qrcode(texto_url, tamanho_px=110):
         except Exception:
             pass
     
-    # Fallback caso a biblioteca qrcode nao esteja instalada
+    # Fallback visual caso qrcode nao esteja instalado
     img_qr = Image.new("RGB", (tamanho_px, tamanho_px), (255, 255, 255))
     draw = ImageDraw.Draw(img_qr)
     draw.rectangle([2, 2, tamanho_px-3, tamanho_px-3], outline=(0, 0, 0), width=2)
@@ -86,7 +88,6 @@ def limpar_jpgs_antigos(caminho_saida_base):
         pass
 
 def renderizar_catalogo(config, produtos, caminho_saida_base):
-    # Separar produtos por Destaque (S vs N)
     prods_destaque = [p for p in produtos if str(p.get('destaque', '')).strip().upper() == 'S']
     prods_normais = [p for p in produtos if str(p.get('destaque', '')).strip().upper() != 'S']
 
@@ -96,12 +97,15 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
     ESPACO_VERT = 20
     ALTURA_RODAPE = 160
 
-    # Cores personalizadas lidas do CSV
+    # Leitura com suporte a variação de digitação do CSV (cor_fundo vs cor_furndo)
+    hex_destaque = config.get('cor_fundo_destaque') or config.get('cor_furndo_destaque')
+    hex_demais   = config.get('cor_fundo_demais') or config.get('cor_furndo_demais')
+
     cor_topo_rodape    = hex_to_rgb(config.get('cor_tit_rodape'), (18, 97, 48))
     cor_tarja_bg       = hex_to_rgb(config.get('cor_grid_tarja'), (92, 179, 137))
     cor_preco_texto    = hex_to_rgb(config.get('cor_grid_preco'), (0, 0, 0))
-    cor_fundo_destaque = hex_to_rgb(config.get('cor_fundo_destaque'), (255, 255, 255))
-    cor_fundo_demais   = hex_to_rgb(config.get('cor_fundo_demais'), (183, 235, 213))
+    cor_fundo_destaque = hex_to_rgb(hex_destaque, (255, 255, 255))
+    cor_fundo_demais   = hex_to_rgb(hex_demais, (183, 235, 213))
 
     try:
         font_sub_titulo     = ImageFont.truetype("arialbd.ttf", 32)
@@ -113,11 +117,10 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
         font_rod_destaque   = ImageFont.truetype("arialbd.ttf", 26)
         font_rod_validade   = ImageFont.truetype("arial.ttf", 20)
         font_rod_tabela     = ImageFont.truetype("arial.ttf", 18)
-        font_rod_site       = ImageFont.truetype("arialbd.ttf", 18)
+        font_rod_site       = ImageFont.truetype("arialbd.ttf", 16)
     except IOError:
         font_sub_titulo = font_cod_bold = font_desc_bold = font_marca = font_preco_destaque = font_preco_normal = font_rod_destaque = font_rod_validade = font_rod_tabela = font_rod_site = ImageFont.load_default()
 
-    # Carregar imagem do tema do cabeçalho (.bmp / .jpg / .png)
     cabecalho_path = config.get('cabecalho_tema', '')
     img_cabecalho = None
     if os.path.exists(cabecalho_path):
@@ -135,12 +138,10 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
 
     larg_util = LARGURA_TOTAL - (MARGEM_LATERAL * 2)
     
-    # Grid Destaque: 3 colunas
     cols_destaque = 3
     larg_card_dest = (larg_util - (ESPACO_HORIZ * 2)) // cols_destaque
     alt_card_dest = 520
 
-    # Grid Normal: 4 colunas (conforme layout de referência)
     cols_normal = 4
     larg_card_norm = (larg_util - (ESPACO_HORIZ * (cols_normal - 1))) // cols_normal
     alt_card_norm = 390
@@ -188,28 +189,27 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
         ALTURA_TOTAL = MARGEM_TOPO_CONTEUDO + conteudo_h + ALTURA_RODAPE + 10
         ALTURA_TOTAL = max(1100, ALTURA_TOTAL)
 
-        # Fundo geral da página aplicado conforme parametrizado no CSV
+        # Fundo geral da página pintado dinamicamente com a cor "fundo_demais" do CSV
         img = Image.new("RGB", (LARGURA_TOTAL, ALTURA_TOTAL), color=cor_fundo_demais)
         draw = ImageDraw.Draw(img)
 
-        # 1. APLICAR ARTE DO CABEÇALHO
+        # 1. CABEÇALHO
         if img_cabecalho:
             img.paste(img_cabecalho, (0, 0))
         else:
             draw.rectangle([0, 0, LARGURA_TOTAL, ALTURA_CABECALHO], fill=cor_topo_rodape)
 
-        # Título do Encarte
         titulo_principal = str(config.get('titulo', 'SUPLEMENTOS NUTRICIONAIS')).upper()
         pos_y_titulo = int(ALTURA_CABECALHO * 0.72)
         draw.text((LARGURA_TOTAL // 2, pos_y_titulo), titulo_principal, fill="#FFFFFF", font=font_sub_titulo, anchor="mm")
 
-        # 2. PRODUTOS DESTAQUES (Topo)
+        # 2. PRODUTOS DESTAQUES
         y_cursor = MARGEM_TOPO_CONTEUDO
         if current_dest:
             for idx, prod in enumerate(current_dest):
                 x = MARGEM_LATERAL + idx * (larg_card_dest + ESPACO_HORIZ)
                 
-                # Card
+                # Card Destaque
                 draw.rounded_rectangle([x, y_cursor, x + larg_card_dest, y_cursor + alt_card_dest], radius=12, outline=cor_tarja_bg, fill=cor_fundo_destaque, width=3)
                 
                 # Tag Destaque
@@ -221,7 +221,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
                 marca_str = str(prod.get('marca', '')).upper()
                 draw.text((x + larg_card_dest - 15, y_cursor + 27), f"CÓD: {cod_str}", fill="#555555", font=font_cod_bold, anchor="rm")
 
-                # Área da Foto em branco no centro do card
+                # Área de imagem
                 area_foto_x, area_foto_y = x + 15, y_cursor + 50
                 area_foto_w, area_foto_h = larg_card_dest - 30, 260
                 
@@ -251,7 +251,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
 
             y_cursor += alt_card_dest + ESPACO_VERT
 
-        # 3. PRODUTOS NORMAIS (Grid 4 colunas)
+        # 3. PRODUTOS NORMAIS
         if current_norm:
             for idx, prod in enumerate(current_norm):
                 col = idx % cols_normal
@@ -260,7 +260,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
                 x = MARGEM_LATERAL + col * (larg_card_norm + ESPACO_HORIZ)
                 y = y_cursor + row * (alt_card_norm + ESPACO_VERT)
 
-                # Card com fundo branco (idêntico ao modelo)
+                # Card
                 draw.rounded_rectangle([x, y, x + larg_card_norm, y + alt_card_norm], radius=10, outline="#E0E0E0", fill="#FFFFFF", width=2)
 
                 # Código
@@ -285,7 +285,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
                 desc = str(prod.get('descricao', ''))[:26]
                 draw.text((x + larg_card_norm//2, y + 242), desc.upper(), fill="#000000", font=font_desc_bold, anchor="mm")
 
-                # Tarja de Preço com cor customizável via CSV
+                # Tarja Preço
                 tarja_y1 = y + 280
                 tarja_y2 = y + alt_card_norm - 10
                 draw.rounded_rectangle([x + 8, tarja_y1, x + larg_card_norm - 8, tarja_y2], radius=8, fill=cor_tarja_bg)
@@ -293,22 +293,24 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
                 preco_fmt = str(prod.get('preco', '')).strip()
                 draw.text((x + larg_card_norm//2, tarja_y1 + (tarja_y2 - tarja_y1)//2), preco_fmt, fill=cor_preco_texto, font=font_preco_normal, anchor="mm")
 
-        # 4. RODAPÉ COM QR CODE GERADO DINAMICAMENTE E SITE ABAIXO
+        # 4. RODAPÉ COM QR CODE E ENDEREÇO DO SITE
         y_rodape = ALTURA_TOTAL - ALTURA_RODAPE
         draw.rectangle([0, y_rodape, LARGURA_TOTAL, ALTURA_TOTAL], fill=cor_topo_rodape)
 
-        # 4a. Canto Esquerdo: QR Code + Endereço do Site abaixo
-        site_url = str(config.get('cabecalho_site', config.get('rodape_site', 'www.oestepharma.com.br'))).strip()
-        img_qr = gerar_qrcode(site_url, tamanho_px=110)
+        # 4a. QR Code no canto esquerdo com o site alinhado abaixo
+        site_url = str(config.get('cabecalho_site') or config.get('rodape_site') or 'www.oestepharma.com.br').strip()
+        
+        tam_qr = 100
+        img_qr = gerar_qrcode(site_url, tamanho_px=tam_qr)
         if img_qr:
             qr_x = MARGEM_LATERAL + 10
             qr_y = y_rodape + 12
             img.paste(img_qr, (qr_x, qr_y))
             
-            # Texto do site renderizado logo abaixo do QR Code
-            draw.text((qr_x + (img_qr.width // 2), qr_y + img_qr.height + 14), site_url, fill="#FFFFFF", font=font_rod_site, anchor="mm")
+            # Escreve o site exatamente abaixo do QR Code
+            draw.text((qr_x + (tam_qr // 2), qr_y + tam_qr + 15), site_url, fill="#FFFFFF", font=font_rod_site, anchor="mm")
 
-        # 4b. Centro: Informações de Contato, Validade e Tabela
+        # 4b. Informações centralizadas de Contato, Telefone e Validade
         contato_str = str(config.get('rodape_contato', '')).strip()
         fone_str = str(config.get('rodape_fone', '')).strip()
         ico_whats = carregar_e_ajustar_imagem(config.get('rodape_logo_fone'), 36, 36)
@@ -346,7 +348,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
         if tabela_str:
             draw.text(((LARGURA_TOTAL + 150) // 2, y_rodape + 115), tabela_str, fill="#CCCCCC", font=font_rod_tabela, anchor="mm")
 
-        # Salvar o catálogo gerado em formato JPG
+        # Salva o arquivo de saída
         caminho_final = f"{nome_base}_{pag_num}{ext}" if pag_num > 1 else f"{nome_base}{ext}"
         img.save(caminho_final, format="JPEG", quality=98)
         pag_num += 1
