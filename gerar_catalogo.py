@@ -155,9 +155,9 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
     try:
         font_sub_titulo     = ImageFont.truetype("arialbd.ttf", 32)
         font_cod_bold       = ImageFont.truetype("arialbd.ttf", 18)
-        font_desc_bold      = ImageFont.truetype("arialbd.ttf", 22) # Aumentado levemente para melhor leitura
-        font_marca          = ImageFont.truetype("arialbd.ttf", 18)
-        font_marca_normal   = ImageFont.truetype("arialbd.ttf", 15)
+        font_desc_bold      = ImageFont.truetype("arialbd.ttf", 26) # Aumentado levemente para melhor leitura
+        font_marca          = ImageFont.truetype("arialbd.ttf", 20)
+        font_marca_normal   = ImageFont.truetype("arialbd.ttf", 20)
         font_preco_destaque = ImageFont.truetype("arialbd.ttf", 54)
         font_preco_normal   = ImageFont.truetype("arialbd.ttf", 38)
         font_rod_destaque   = ImageFont.truetype("arialbd.ttf", 26)
