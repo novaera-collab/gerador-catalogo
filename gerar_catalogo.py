@@ -157,7 +157,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
     try:
         font_sub_titulo     = ImageFont.truetype("arialbd.ttf", 32)
         font_cod_bold       = ImageFont.truetype("arialbd.ttf", 18)
-        font_desc_bold      = ImageFont.truetype("arialbd.ttf", 26)
+        font_desc_bold      = ImageFont.truetype("arialbd.ttf", 22)
         font_marca          = ImageFont.truetype("arialbd.ttf", 20)
         font_marca_normal   = ImageFont.truetype("arialbd.ttf", 20)
         font_preco_destaque = ImageFont.truetype("arialbd.ttf", 54)
@@ -201,12 +201,9 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
 
     pag_num = 1
     MAX_ALTURA_PAGINA = 2500
-
-    cols_destaque_base = 2
     cols_normal_base = 4
 
     larg_util = LARGURA_TOTAL - (MARGEM_LATERAL * 2)
-    larg_card_dest_padrao = (larg_util - (ESPACO_HORIZ * (cols_destaque_base - 1))) // cols_destaque_base
     larg_card_norm_padrao = (larg_util - (ESPACO_HORIZ * (cols_normal_base - 1))) // cols_normal_base
 
     alt_card_dest = 600
@@ -214,8 +211,9 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
 
     while True:
         current_dest = []
+        # Aceita ate 3 destaques no topo
         if pag_num == 1 and queue_dest:
-            n_cap = min(2, len(queue_dest))
+            n_cap = min(3, len(queue_dest))
             current_dest = queue_dest[:n_cap]
             queue_dest = queue_dest[n_cap:]
 
@@ -231,7 +229,6 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
             current_norm = queue_norm[:max_items_page]
             queue_norm = queue_norm[max_items_page:]
 
-        # Se nao houver itens para desenhar nesta pagina (e nao for a primeira pagina obrigatoria), encerra o loop
         if not current_dest and not current_norm and pag_num > 1:
             break
 
@@ -253,27 +250,29 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
         pos_y_titulo = int(ALTURA_CABECALHO * 0.72)
         draw.text((LARGURA_TOTAL // 2, pos_y_titulo), titulo_principal, fill="#FFFFFF", font=font_sub_titulo, anchor="mm")
 
-        # 2. Destaques
+        # 2. Destaques (1, 2 ou 3 prods)
         y_cursor = MARGEM_TOPO_CONTEUDO
         if current_dest:
             qtd_d = len(current_dest)
-            largura_linha_d = (qtd_d * larg_card_dest_padrao) + ((qtd_d - 1) * ESPACO_HORIZ)
+            # Calcula a largura dinamica para se adequar a 1, 2 ou 3 itens
+            larg_card_dest = (larg_util - (ESPACO_HORIZ * (qtd_d - 1))) // qtd_d
+            largura_linha_d = (qtd_d * larg_card_dest) + ((qtd_d - 1) * ESPACO_HORIZ)
             x_inicial_d = (LARGURA_TOTAL - largura_linha_d) // 2
 
             for idx, prod in enumerate(current_dest):
-                x = x_inicial_d + idx * (larg_card_dest_padrao + ESPACO_HORIZ)
+                x = x_inicial_d + idx * (larg_card_dest + ESPACO_HORIZ)
                 
-                draw.rounded_rectangle([x, y_cursor, x + larg_card_dest_padrao, y_cursor + alt_card_dest], radius=12, outline=cor_tarja_bg, fill=cor_fundo_destaque, width=3)
+                draw.rounded_rectangle([x, y_cursor, x + larg_card_dest, y_cursor + alt_card_dest], radius=12, outline=cor_tarja_bg, fill=cor_fundo_destaque, width=3)
                 
                 draw.rounded_rectangle([x + 12, y_cursor + 12, x + 130, y_cursor + 42], radius=6, fill="#D32F2F")
                 draw.text((x + 71, y_cursor + 27), "DESTAQUE", fill="#FFFFFF", font=font_marca, anchor="mm")
 
                 cod_str = str(prod.get('codigo', '')).zfill(5)
                 marca_str = str(prod.get('marca', '')).upper()
-                draw.text((x + larg_card_dest_padrao - 15, y_cursor + 27), f"CÓD: {cod_str}", fill="#555555", font=font_cod_bold, anchor="rm")
+                draw.text((x + larg_card_dest - 15, y_cursor + 27), f"CÓD: {cod_str}", fill="#555555", font=font_cod_bold, anchor="rm")
 
                 area_foto_x, area_foto_y = x + 15, y_cursor + 50
-                area_foto_w, area_foto_h = larg_card_dest_padrao - 30, 320
+                area_foto_w, area_foto_h = larg_card_dest - 30, 320
                 
                 draw.rounded_rectangle([area_foto_x, area_foto_y, area_foto_x + area_foto_w, area_foto_y + area_foto_h], radius=8, fill="#FFFFFF")
 
@@ -286,21 +285,22 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
                     draw.text((area_foto_x + area_foto_w//2, area_foto_y + area_foto_h//2), "[ SEM FOTO ]", fill="#555555", font=font_cod_bold, anchor="mm")
 
                 desc = str(prod.get('descricao', '')).upper()
-                linhas_desc = textwrap.wrap(desc, width=35)
+                wrap_w = 35 if qtd_d <= 2 else 26
+                linhas_desc = textwrap.wrap(desc, width=wrap_w)
                 y_texto = y_cursor + 390
                 for linha in linhas_desc[:2]:
-                    draw.text((x + larg_card_dest_padrao//2, y_texto), linha, fill="#000000", font=font_desc_bold, anchor="mm")
+                    draw.text((x + larg_card_dest//2, y_texto), linha, fill="#000000", font=font_desc_bold, anchor="mm")
                     y_texto += 22
 
                 if marca_str:
-                    draw.text((x + larg_card_dest_padrao//2, y_cursor + 445), marca_str, fill="#777777", font=font_marca, anchor="mm")
+                    draw.text((x + larg_card_dest//2, y_cursor + 445), marca_str, fill="#777777", font=font_marca, anchor="mm")
 
                 tarja_y1 = y_cursor + 475
                 tarja_y2 = y_cursor + alt_card_dest - 12
-                draw.rounded_rectangle([x + 10, tarja_y1, x + larg_card_dest_padrao - 10, tarja_y2], radius=10, fill=cor_tarja_bg)
+                draw.rounded_rectangle([x + 10, tarja_y1, x + larg_card_dest - 10, tarja_y2], radius=10, fill=cor_tarja_bg)
                 
                 preco_fmt = str(prod.get('preco', '')).strip()
-                draw.text((x + larg_card_dest_padrao//2, tarja_y1 + (tarja_y2 - tarja_y1)//2), preco_fmt, fill=cor_preco_texto, font=font_preco_destaque, anchor="mm")
+                draw.text((x + larg_card_dest//2, tarja_y1 + (tarja_y2 - tarja_y1)//2), preco_fmt, fill=cor_preco_texto, font=font_preco_destaque, anchor="mm")
 
             y_cursor += alt_card_dest + ESPACO_VERT
 
@@ -321,11 +321,9 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
 
                 draw.rounded_rectangle([x, y, x + larg_card_norm_padrao, y + alt_card_norm], radius=10, outline="#E0E0E0", fill="#FFFFFF", width=2)
 
-                # Código do Produto na esquerda
                 cod_str = str(prod.get('codigo', '')).zfill(5)
                 draw.text((x + 12, y + 15), f"CÓD: {cod_str}", fill="#000000", font=font_cod_bold)
 
-                # Marca do Produto na Direita quando NAO é destaque
                 marca_str = str(prod.get('marca', '')).upper()
                 if marca_str:
                     draw.text((x + larg_card_norm_padrao - 12, y + 16), marca_str, fill="#666666", font=font_marca_normal, anchor="ra")
@@ -410,7 +408,6 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
         
         pag_num += 1
 
-        # Trava adicional de seguranca caso as filas ja estejam vazias
         if not queue_dest and not queue_norm:
             break
 
