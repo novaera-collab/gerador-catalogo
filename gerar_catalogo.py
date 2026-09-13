@@ -44,7 +44,6 @@ def carregar_e_ajustar_imagem(caminho, largura_max, altura_max, fundo_cor=None):
         return None
 
 def gerar_imagem_qrcode(url_completa, tam_px=110):
-    # 1. Tenta gerar via biblioteca local se disponÃ­vel
     if HAS_QRCODE:
         try:
             qr = qrcode.QRCode(
@@ -60,7 +59,6 @@ def gerar_imagem_qrcode(url_completa, tam_px=110):
         except Exception:
             pass
 
-    # 2. Tenta gerar via API do Google Charts caso nÃ£o tenha a lib local
     try:
         url_encoded = urllib.parse.quote(url_completa)
         api_url = f"https://chart.googleapis.com/chart?cht=qr&chs={tam_px}x{tam_px}&chl={url_encoded}&choe=UTF-8"
@@ -72,7 +70,6 @@ def gerar_imagem_qrcode(url_completa, tam_px=110):
     except Exception:
         pass
 
-    # 3. Fallback visual seguro
     img_qr = Image.new("RGB", (tam_px, tam_px), (255, 255, 255))
     d_qr = ImageDraw.Draw(img_qr)
     d_qr.rectangle([2, 2, tam_px-3, tam_px-3], outline=(0, 0, 0), width=2)
@@ -108,7 +105,7 @@ def criar_card_qrcode_estilizado(url_site, cor_tema_rgb, tam_qr=100):
     site_exibicao = url_limpa.replace("https://", "").replace("http://", "")
     draw.text((w_card // 2, y_tarja + 10), site_exibicao, fill="#FFFFFF", font=font_url, anchor="mm")
 
-    draw.text((w_card // 2, h_card - 14), "APONTE A CÃ‚MERA DO CELULAR", fill="#333333", font=font_sub, anchor="mm")
+    draw.text((w_card // 2, h_card - 14), "APONTE A CÂMERA DO CELULAR", fill="#333333", font=font_sub, anchor="mm")
     draw.text((w_card // 2, h_card - 5), "E ACESSE AGORA", fill="#333333", font=font_sub, anchor="mm")
 
     return card
@@ -120,14 +117,19 @@ def limpar_jpgs_antigos(caminho_saida_base):
         if '_' in nome_base and nome_base.rsplit('_', 1)[1].isdigit():
             nome_base = nome_base.rsplit('_', 1)[0]
 
-        padrao_busca = os.path.join(pasta_dest, f"{nome_base}*.JPG")
-        padrao_busca_lower = os.path.join(pasta_dest, f"{nome_base}*.jpg")
+        padrao_busca = os.path.join(pasta_dest, f"{nome_base}_*.JPG")
+        padrao_busca_lower = os.path.join(pasta_dest, f"{nome_base}_*.jpg")
         
-        for arq in set(glob.glob(padrao_busca) + glob.glob(padrao_busca_lower)):
-            try:
-                os.remove(arq)
-            except Exception:
-                pass
+        arquivos = list(set(glob.glob(padrao_busca) + glob.glob(padrao_busca_lower)))
+        arquivos.append(os.path.join(pasta_dest, f"{nome_base}.JPG"))
+        arquivos.append(os.path.join(pasta_dest, f"{nome_base}.jpg"))
+
+        for arq in arquivos:
+            if os.path.exists(arq):
+                try:
+                    os.remove(arq)
+                except Exception:
+                    pass
     except Exception:
         pass
 
@@ -155,7 +157,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
     try:
         font_sub_titulo     = ImageFont.truetype("arialbd.ttf", 32)
         font_cod_bold       = ImageFont.truetype("arialbd.ttf", 18)
-        font_desc_bold      = ImageFont.truetype("arialbd.ttf", 26) # Aumentado levemente para melhor leitura
+        font_desc_bold      = ImageFont.truetype("arialbd.ttf", 26)
         font_marca          = ImageFont.truetype("arialbd.ttf", 20)
         font_marca_normal   = ImageFont.truetype("arialbd.ttf", 20)
         font_preco_destaque = ImageFont.truetype("arialbd.ttf", 54)
@@ -210,7 +212,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
     alt_card_dest = 600
     alt_card_norm = 420
 
-    while queue_dest or queue_norm or pag_num == 1:
+    while True:
         current_dest = []
         if pag_num == 1 and queue_dest:
             n_cap = min(2, len(queue_dest))
@@ -228,6 +230,10 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
         if queue_norm:
             current_norm = queue_norm[:max_items_page]
             queue_norm = queue_norm[max_items_page:]
+
+        # Se nao houver itens para desenhar nesta pagina (e nao for a primeira pagina obrigatoria), encerra o loop
+        if not current_dest and not current_norm and pag_num > 1:
+            break
 
         num_rows_norm = (len(current_norm) + cols_normal_base - 1) // cols_normal_base if current_norm else 0
         conteudo_h = (alt_card_dest + ESPACO_VERT if current_dest else 0) + (num_rows_norm * (alt_card_norm + ESPACO_VERT))
@@ -264,7 +270,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
 
                 cod_str = str(prod.get('codigo', '')).zfill(5)
                 marca_str = str(prod.get('marca', '')).upper()
-                draw.text((x + larg_card_dest_padrao - 15, y_cursor + 27), f"CÃ“D: {cod_str}", fill="#555555", font=font_cod_bold, anchor="rm")
+                draw.text((x + larg_card_dest_padrao - 15, y_cursor + 27), f"CÓD: {cod_str}", fill="#555555", font=font_cod_bold, anchor="rm")
 
                 area_foto_x, area_foto_y = x + 15, y_cursor + 50
                 area_foto_w, area_foto_h = larg_card_dest_padrao - 30, 320
@@ -315,11 +321,11 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
 
                 draw.rounded_rectangle([x, y, x + larg_card_norm_padrao, y + alt_card_norm], radius=10, outline="#E0E0E0", fill="#FFFFFF", width=2)
 
-                # CÃ³digo do Produto na esquerda
+                # Código do Produto na esquerda
                 cod_str = str(prod.get('codigo', '')).zfill(5)
-                draw.text((x + 12, y + 15), f"CÃ“D: {cod_str}", fill="#000000", font=font_cod_bold)
+                draw.text((x + 12, y + 15), f"CÓD: {cod_str}", fill="#000000", font=font_cod_bold)
 
-                # Marca do Produto na Direita quando NAO Ã© destaque
+                # Marca do Produto na Direita quando NAO é destaque
                 marca_str = str(prod.get('marca', '')).upper()
                 if marca_str:
                     draw.text((x + larg_card_norm_padrao - 12, y + 16), marca_str, fill="#666666", font=font_marca_normal, anchor="ra")
@@ -337,7 +343,6 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
                 else:
                     draw.text((area_foto_x + area_foto_w//2, area_foto_y + area_foto_h//2), "[ SEM FOTO ]", fill="#555555", font=font_marca, anchor="mm")
 
-                # Quebra de Linha com fonte um pouco maior e melhor espaÃ§amento
                 desc = str(prod.get('descricao', '')).upper()
                 linhas_desc = textwrap.wrap(desc, width=21)
                 y_texto = y + 242
@@ -394,7 +399,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
 
         validade_str = str(config.get('rodape_validade', '')).strip()
         if validade_str:
-            draw.text(((LARGURA_TOTAL + 150) // 2, y_rodape + 100), f"PreÃ§os vÃ¡lidos no perÃ­odo: {validade_str}", fill="#E0E0E0", font=font_rod_validade, anchor="mm")
+            draw.text(((LARGURA_TOTAL + 150) // 2, y_rodape + 100), f"Preços válidos no período: {validade_str}", fill="#E0E0E0", font=font_rod_validade, anchor="mm")
 
         tabela_str = str(config.get('rodape_tabela', '')).strip()
         if tabela_str:
@@ -402,7 +407,12 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
 
         caminho_final = f"{nome_base}_{pag_num}{ext}" if pag_num > 1 else f"{nome_base}{ext}"
         img.save(caminho_final, format="JPEG", quality=98)
+        
         pag_num += 1
+
+        # Trava adicional de seguranca caso as filas ja estejam vazias
+        if not queue_dest and not queue_norm:
+            break
 
 if __name__ == "__main__":
     try:
