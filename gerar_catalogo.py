@@ -3,6 +3,7 @@ import os
 import csv
 import glob
 import traceback
+import textwrap
 from PIL import Image, ImageDraw, ImageFont
 
 try:
@@ -44,54 +45,37 @@ def gerar_imagem_qrcode(url_completa, tam_px=110):
     if HAS_QRCODE:
         try:
             qr = qrcode.QRCode(
-                version=1,
-                error_correction=qrcode.constants.ERROR_CORRECT_M,
-                box_size=4,
-                border=1
+                version=None,
+                error_correction=qrcode.constants.ERROR_CORRECT_H,
+                box_size=12,
+                border=4
             )
             qr.add_data(url_completa)
             qr.make(fit=True)
-            
-            # Matriz binaria para renderizacao direta em RGB sem conversao de paleta
-            matrix = qr.get_matrix()
-            num_modules = len(matrix)
-            
-            img_qr = Image.new("RGB", (num_modules, num_modules), (255, 255, 255))
-            draw = ImageDraw.Draw(img_qr)
-            
-            for r in range(num_modules):
-                for c in range(num_modules):
-                    if matrix[r][c]:
-                        draw.point((c, r), fill=(0, 0, 0))
-                        
-            return img_qr.resize((tam_px, tam_px), Image.Resampling.NEAREST)
+            img_qr = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+            return img_qr.resize((tam_px, tam_px), Image.Resampling.LANCZOS)
         except Exception:
             pass
 
-    # Fallback seguro caso a biblioteca qrcode nao esteja instalada
     img_qr = Image.new("RGB", (tam_px, tam_px), (255, 255, 255))
     d_qr = ImageDraw.Draw(img_qr)
     d_qr.rectangle([2, 2, tam_px-3, tam_px-3], outline=(0, 0, 0), width=2)
     d_qr.text((tam_px//2, tam_px//2), "QR CODE", fill=(0, 0, 0), anchor="mm")
     return img_qr
 
-def criar_card_qrcode_estilizado(url_site, cor_tema_rgb, tam_qr=110):
+def criar_card_qrcode_estilizado(url_site, cor_tema_rgb, tam_qr=100):
     url_limpa = str(url_site).strip() if url_site else "www.oestepharma.com.br"
     url_completa = url_limpa if url_limpa.startswith(("http://", "https://")) else "https://" + url_limpa
 
-    # Renderizacao do QR Code
     img_qr = gerar_imagem_qrcode(url_completa, tam_px=tam_qr)
 
-    # Moldura Visual
     w_card, h_card = tam_qr + 30, tam_qr + 85
     card = Image.new("RGBA", (w_card, h_card), (255, 255, 255, 0))
     draw = ImageDraw.Draw(card)
 
-    # Fundo branco arredondado
     draw.rounded_rectangle([0, 0, w_card, h_card], radius=12, fill="#FFFFFF")
-
-    # Header do Card
     draw.rounded_rectangle([8, 5, w_card - 8, 28], radius=8, fill=cor_tema_rgb)
+    
     try:
         font_hdr = ImageFont.truetype("arialbd.ttf", 10)
         font_sub = ImageFont.truetype("arialbd.ttf", 9)
@@ -100,25 +84,14 @@ def criar_card_qrcode_estilizado(url_site, cor_tema_rgb, tam_qr=110):
         font_hdr = font_sub = font_url = ImageFont.load_default()
 
     draw.text((w_card // 2, 16), "ACESSE NOSSO SITE", fill="#FFFFFF", font=font_hdr, anchor="mm")
-
-    # Posicionamento do QR Code
     card.paste(img_qr, (15, 33))
 
-    # Detalhes das cantoneiras
-    cx1, cy1, cx2, cy2 = 10, 28, w_card - 10, 33 + tam_qr + 5
-    draw.arc([cx1, cy1, cx1 + 16, cy1 + 16], start=180, end=270, fill=cor_tema_rgb, width=2)
-    draw.arc([cx2 - 16, cy1, cx2, cy1 + 16], start=270, end=360, fill=cor_tema_rgb, width=2)
-    draw.arc([cx1, cy2 - 16, cx1 + 16, cy2], start=90, end=180, fill=cor_tema_rgb, width=2)
-    draw.arc([cx2 - 16, cy2 - 16, cx2, cy2], start=0, end=90, fill=cor_tema_rgb, width=2)
-
-    # Tarja inferior com a URL do CSV
     y_tarja = 33 + tam_qr + 8
     draw.rounded_rectangle([8, y_tarja, w_card - 8, y_tarja + 20], radius=8, fill=cor_tema_rgb)
     
     site_exibicao = url_limpa.replace("https://", "").replace("http://", "")
     draw.text((w_card // 2, y_tarja + 10), site_exibicao, fill="#FFFFFF", font=font_url, anchor="mm")
 
-    # Legenda inferior
     draw.text((w_card // 2, h_card - 14), "APONTE A CÂMERA DO CELULAR", fill="#333333", font=font_sub, anchor="mm")
     draw.text((w_card // 2, h_card - 5), "E ACESSE AGORA", fill="#333333", font=font_sub, anchor="mm")
 
@@ -154,9 +127,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
 
     hex_destaque = config.get('cor_fundo_destaque') or config.get('cor_furndo_destaque')
     hex_demais   = config.get('cor_fundo_demais') or config.get('cor_furndo_demais')
-    
-    # Leitura da cor do rodape via rodape_cor_tema
-    hex_rodape = config.get('rodape_cor_tema') or config.get('cor_tit_rodape')
+    hex_rodape   = config.get('rodape_cor_tema') or config.get('cor_tit_rodape')
 
     cor_rodape_bg      = hex_to_rgb(hex_rodape, (20, 54, 31))
     cor_topo_cabecalho = hex_to_rgb(config.get('cor_tit_rodape'), (18, 97, 48))
@@ -167,11 +138,11 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
 
     try:
         font_sub_titulo     = ImageFont.truetype("arialbd.ttf", 32)
-        font_cod_bold       = ImageFont.truetype("arialbd.ttf", 20)
-        font_desc_bold      = ImageFont.truetype("arialbd.ttf", 22)
-        font_marca          = ImageFont.truetype("arialbd.ttf", 18)
-        font_preco_destaque = ImageFont.truetype("arialbd.ttf", 52)
-        font_preco_normal   = ImageFont.truetype("arialbd.ttf", 40)
+        font_cod_bold       = ImageFont.truetype("arialbd.ttf", 18)
+        font_desc_bold      = ImageFont.truetype("arialbd.ttf", 17)
+        font_marca          = ImageFont.truetype("arialbd.ttf", 16)
+        font_preco_destaque = ImageFont.truetype("arialbd.ttf", 54)
+        font_preco_normal   = ImageFont.truetype("arialbd.ttf", 38)
         font_rod_destaque   = ImageFont.truetype("arialbd.ttf", 26)
         font_rod_validade   = ImageFont.truetype("arial.ttf", 20)
         font_rod_tabela     = ImageFont.truetype("arial.ttf", 18)
@@ -210,22 +181,23 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
     queue_norm = list(prods_normais)
 
     pag_num = 1
-    MAX_ALTURA_PAGINA = 2400
+    MAX_ALTURA_PAGINA = 2500
 
-    cols_destaque_base = 3
+    cols_destaque_base = 2
     cols_normal_base = 4
 
     larg_util = LARGURA_TOTAL - (MARGEM_LATERAL * 2)
     larg_card_dest_padrao = (larg_util - (ESPACO_HORIZ * (cols_destaque_base - 1))) // cols_destaque_base
     larg_card_norm_padrao = (larg_util - (ESPACO_HORIZ * (cols_normal_base - 1))) // cols_normal_base
 
-    alt_card_dest = 520
-    alt_card_norm = 390
+    # Tamanhos atualizados para destaque maior e acomodacao da quebra de linha
+    alt_card_dest = 600
+    alt_card_norm = 420
 
     while queue_dest or queue_norm or pag_num == 1:
         current_dest = []
         if pag_num == 1 and queue_dest:
-            n_cap = min(3, len(queue_dest))
+            n_cap = min(2, len(queue_dest))
             current_dest = queue_dest[:n_cap]
             queue_dest = queue_dest[n_cap:]
 
@@ -279,7 +251,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
                 draw.text((x + larg_card_dest_padrao - 15, y_cursor + 27), f"CÓD: {cod_str}", fill="#555555", font=font_cod_bold, anchor="rm")
 
                 area_foto_x, area_foto_y = x + 15, y_cursor + 50
-                area_foto_w, area_foto_h = larg_card_dest_padrao - 30, 260
+                area_foto_w, area_foto_h = larg_card_dest_padrao - 30, 320
                 
                 draw.rounded_rectangle([area_foto_x, area_foto_y, area_foto_x + area_foto_w, area_foto_y + area_foto_h], radius=8, fill="#FFFFFF")
 
@@ -291,12 +263,18 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
                 else:
                     draw.text((area_foto_x + area_foto_w//2, area_foto_y + area_foto_h//2), "[ SEM FOTO ]", fill="#555555", font=font_cod_bold, anchor="mm")
 
-                desc = str(prod.get('descricao', ''))[:35]
-                draw.text((x + larg_card_dest_padrao//2, y_cursor + 335), desc.upper(), fill="#000000", font=font_desc_bold, anchor="mm")
-                if marca_str:
-                    draw.text((x + larg_card_dest_padrao//2, y_cursor + 365), marca_str, fill="#777777", font=font_marca, anchor="mm")
+                # Quebra de Linha Inteligente na Descricao
+                desc = str(prod.get('descricao', '')).upper()
+                linhas_desc = textwrap.wrap(desc, width=35)
+                y_texto = y_cursor + 390
+                for linha in linhas_desc[:2]:
+                    draw.text((x + larg_card_dest_padrao//2, y_texto), linha, fill="#000000", font=font_desc_bold, anchor="mm")
+                    y_texto += 22
 
-                tarja_y1 = y_cursor + 398
+                if marca_str:
+                    draw.text((x + larg_card_dest_padrao//2, y_cursor + 445), marca_str, fill="#777777", font=font_marca, anchor="mm")
+
+                tarja_y1 = y_cursor + 475
                 tarja_y2 = y_cursor + alt_card_dest - 12
                 draw.rounded_rectangle([x + 10, tarja_y1, x + larg_card_dest_padrao - 10, tarja_y2], radius=10, fill=cor_tarja_bg)
                 
@@ -305,7 +283,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
 
             y_cursor += alt_card_dest + ESPACO_VERT
 
-        # 3. Produtos Normais (Calculo por Linha para Centralizar Incompletas)
+        # 3. Produtos Normais
         if current_norm:
             total_normais = len(current_norm)
             
@@ -314,7 +292,6 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
                 col = idx % cols_normal_base
 
                 itens_na_linha = min(cols_normal_base, total_normais - (row * cols_normal_base))
-
                 largura_linha_n = (itens_na_linha * larg_card_norm_padrao) + ((itens_na_linha - 1) * ESPACO_HORIZ)
                 x_inicial_n = (LARGURA_TOTAL - largura_linha_n) // 2
                 
@@ -339,10 +316,15 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
                 else:
                     draw.text((area_foto_x + area_foto_w//2, area_foto_y + area_foto_h//2), "[ SEM FOTO ]", fill="#555555", font=font_marca, anchor="mm")
 
-                desc = str(prod.get('descricao', ''))[:30]
-                draw.text((x + larg_card_norm_padrao//2, y + 242), desc.upper(), fill="#000000", font=font_desc_bold, anchor="mm")
+                # Quebra de Linha Inteligente na Descricao (Garante ajuste dentro do Card)
+                desc = str(prod.get('descricao', '')).upper()
+                linhas_desc = textwrap.wrap(desc, width=22)
+                y_texto = y + 245
+                for linha in linhas_desc[:2]:
+                    draw.text((x + larg_card_norm_padrao//2, y_texto), linha, fill="#000000", font=font_desc_bold, anchor="mm")
+                    y_texto += 20
 
-                tarja_y1 = y + 280
+                tarja_y1 = y + 310
                 tarja_y2 = y + alt_card_norm - 10
                 draw.rounded_rectangle([x + 8, tarja_y1, x + larg_card_norm_padrao - 8, tarja_y2], radius=8, fill=cor_tarja_bg)
 
