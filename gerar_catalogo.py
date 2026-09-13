@@ -61,7 +61,7 @@ def gerar_qrcode(texto_url, tamanho_px=110):
         except Exception:
             pass
     
-    # Fallback visual caso qrcode nao esteja instalado
+    # Fallback visual caso biblioteca qrcode nao esteja instalada
     img_qr = Image.new("RGB", (tamanho_px, tamanho_px), (255, 255, 255))
     draw = ImageDraw.Draw(img_qr)
     draw.rectangle([2, 2, tamanho_px-3, tamanho_px-3], outline=(0, 0, 0), width=2)
@@ -186,14 +186,14 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
         num_rows_norm = (len(current_norm) + cols_normal - 1) // cols_normal if current_norm else 0
         conteudo_h = (alt_card_dest + ESPACO_VERT if current_dest else 0) + (num_rows_norm * (alt_card_norm + ESPACO_VERT))
         
+        # Ajuste dinamico de altura total eliminando espaco vago final
         ALTURA_TOTAL = MARGEM_TOPO_CONTEUDO + conteudo_h + ALTURA_RODAPE + 10
-        ALTURA_TOTAL = max(1100, ALTURA_TOTAL)
 
-        # Fundo geral da página pintado dinamicamente com a cor "fundo_demais" do CSV
+        # Fundo geral da pagina
         img = Image.new("RGB", (LARGURA_TOTAL, ALTURA_TOTAL), color=cor_fundo_demais)
         draw = ImageDraw.Draw(img)
 
-        # 1. CABEÇALHO
+        # 1. CABECALHO
         if img_cabecalho:
             img.paste(img_cabecalho, (0, 0))
         else:
@@ -203,11 +203,15 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
         pos_y_titulo = int(ALTURA_CABECALHO * 0.72)
         draw.text((LARGURA_TOTAL // 2, pos_y_titulo), titulo_principal, fill="#FFFFFF", font=font_sub_titulo, anchor="mm")
 
-        # 2. PRODUTOS DESTAQUES
+        # 2. PRODUTOS DESTAQUES (Topo)
         y_cursor = MARGEM_TOPO_CONTEUDO
         if current_dest:
+            n_dest = len(current_dest)
+            largura_total_dest = (n_dest * larg_card_dest) + ((n_dest - 1) * ESPACO_HORIZ)
+            x_inicial_dest = (LARGURA_TOTAL - largura_total_dest) // 2
+
             for idx, prod in enumerate(current_dest):
-                x = MARGEM_LATERAL + idx * (larg_card_dest + ESPACO_HORIZ)
+                x = x_inicial_dest + idx * (larg_card_dest + ESPACO_HORIZ)
                 
                 # Card Destaque
                 draw.rounded_rectangle([x, y_cursor, x + larg_card_dest, y_cursor + alt_card_dest], radius=12, outline=cor_tarja_bg, fill=cor_fundo_destaque, width=3)
@@ -216,12 +220,12 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
                 draw.rounded_rectangle([x + 12, y_cursor + 12, x + 130, y_cursor + 42], radius=6, fill="#D32F2F")
                 draw.text((x + 71, y_cursor + 27), "DESTAQUE", fill="#FFFFFF", font=font_marca, anchor="mm")
 
-                # Código
+                # Codigo
                 cod_str = str(prod.get('codigo', '')).zfill(5)
                 marca_str = str(prod.get('marca', '')).upper()
                 draw.text((x + larg_card_dest - 15, y_cursor + 27), f"CÓD: {cod_str}", fill="#555555", font=font_cod_bold, anchor="rm")
 
-                # Área de imagem
+                # Area da foto
                 area_foto_x, area_foto_y = x + 15, y_cursor + 50
                 area_foto_w, area_foto_h = larg_card_dest - 30, 260
                 
@@ -235,13 +239,13 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
                 else:
                     draw.text((area_foto_x + area_foto_w//2, area_foto_y + area_foto_h//2), "[ SEM FOTO ]", fill="#555555", font=font_cod_bold, anchor="mm")
 
-                # Descrição
+                # Descricao
                 desc = str(prod.get('descricao', ''))[:32]
                 draw.text((x + larg_card_dest//2, y_cursor + 335), desc.upper(), fill="#000000", font=font_desc_bold, anchor="mm")
                 if marca_str:
                     draw.text((x + larg_card_dest//2, y_cursor + 365), marca_str, fill="#777777", font=font_marca, anchor="mm")
 
-                # Tarja de Preço
+                # Tarja Preco
                 tarja_y1 = y_cursor + 398
                 tarja_y2 = y_cursor + alt_card_dest - 12
                 draw.rounded_rectangle([x + 10, tarja_y1, x + larg_card_dest - 10, tarja_y2], radius=10, fill=cor_tarja_bg)
@@ -251,23 +255,35 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
 
             y_cursor += alt_card_dest + ESPACO_VERT
 
-        # 3. PRODUTOS NORMAIS
+        # 3. PRODUTOS NORMAIS (Com centralização de linha incompleta)
         if current_norm:
+            total_normais = len(current_norm)
+            
             for idx, prod in enumerate(current_norm):
-                col = idx % cols_normal
                 row = idx // cols_normal
+                col = idx % cols_normal
+                
+                # Verifica quantos produtos existem nesta linha especifica
+                itens_na_linha = min(cols_normal, total_normais - (row * cols_normal))
 
-                x = MARGEM_LATERAL + col * (larg_card_norm + ESPACO_HORIZ)
+                if itens_na_linha < cols_normal:
+                    # Centraliza os cards quando houver 1, 2 ou 3 produtos na linha
+                    largura_linha = (itens_na_linha * larg_card_norm) + ((itens_na_linha - 1) * ESPACO_HORIZ)
+                    x_inicial_linha = (LARGURA_TOTAL - largura_linha) // 2
+                    x = x_inicial_linha + col * (larg_card_norm + ESPACO_HORIZ)
+                else:
+                    x = MARGEM_LATERAL + col * (larg_card_norm + ESPACO_HORIZ)
+
                 y = y_cursor + row * (alt_card_norm + ESPACO_VERT)
 
                 # Card
                 draw.rounded_rectangle([x, y, x + larg_card_norm, y + alt_card_norm], radius=10, outline="#E0E0E0", fill="#FFFFFF", width=2)
 
-                # Código
+                # Codigo
                 cod_str = str(prod.get('codigo', '')).zfill(5)
                 draw.text((x + 12, y + 15), f"CÓD: {cod_str}", fill="#000000", font=font_cod_bold)
 
-                # Área da Foto
+                # Area da Foto
                 area_foto_x, area_foto_y = x + 10, y + 38
                 area_foto_w, area_foto_h = larg_card_norm - 20, 190
 
@@ -281,11 +297,11 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
                 else:
                     draw.text((area_foto_x + area_foto_w//2, area_foto_y + area_foto_h//2), "[ SEM FOTO ]", fill="#555555", font=font_marca, anchor="mm")
 
-                # Descrição
+                # Descricao
                 desc = str(prod.get('descricao', ''))[:26]
                 draw.text((x + larg_card_norm//2, y + 242), desc.upper(), fill="#000000", font=font_desc_bold, anchor="mm")
 
-                # Tarja Preço
+                # Tarja Preco
                 tarja_y1 = y + 280
                 tarja_y2 = y + alt_card_norm - 10
                 draw.rounded_rectangle([x + 8, tarja_y1, x + larg_card_norm - 8, tarja_y2], radius=8, fill=cor_tarja_bg)
@@ -293,11 +309,11 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
                 preco_fmt = str(prod.get('preco', '')).strip()
                 draw.text((x + larg_card_norm//2, tarja_y1 + (tarja_y2 - tarja_y1)//2), preco_fmt, fill=cor_preco_texto, font=font_preco_normal, anchor="mm")
 
-        # 4. RODAPÉ COM QR CODE E ENDEREÇO DO SITE
+        # 4. RODAPÉ FIXADO DIRETAMENTE APÓS O CONTEÚDO
         y_rodape = ALTURA_TOTAL - ALTURA_RODAPE
         draw.rectangle([0, y_rodape, LARGURA_TOTAL, ALTURA_TOTAL], fill=cor_topo_rodape)
 
-        # 4a. QR Code no canto esquerdo com o site alinhado abaixo
+        # 4a. QR Code com a variável cabecalho_site do CSV
         site_url = str(config.get('cabecalho_site') or config.get('rodape_site') or 'www.oestepharma.com.br').strip()
         
         tam_qr = 100
@@ -307,10 +323,10 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
             qr_y = y_rodape + 12
             img.paste(img_qr, (qr_x, qr_y))
             
-            # Escreve o site exatamente abaixo do QR Code
+            # Texto do site logo abaixo do QR Code
             draw.text((qr_x + (tam_qr // 2), qr_y + tam_qr + 15), site_url, fill="#FFFFFF", font=font_rod_site, anchor="mm")
 
-        # 4b. Informações centralizadas de Contato, Telefone e Validade
+        # 4b. Informações centralizadas do Rodapé
         contato_str = str(config.get('rodape_contato', '')).strip()
         fone_str = str(config.get('rodape_fone', '')).strip()
         ico_whats = carregar_e_ajustar_imagem(config.get('rodape_logo_fone'), 36, 36)
@@ -348,7 +364,6 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
         if tabela_str:
             draw.text(((LARGURA_TOTAL + 150) // 2, y_rodape + 115), tabela_str, fill="#CCCCCC", font=font_rod_tabela, anchor="mm")
 
-        # Salva o arquivo de saída
         caminho_final = f"{nome_base}_{pag_num}{ext}" if pag_num > 1 else f"{nome_base}{ext}"
         img.save(caminho_final, format="JPEG", quality=98)
         pag_num += 1
