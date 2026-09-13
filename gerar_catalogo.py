@@ -80,7 +80,7 @@ def gerar_imagem_qrcode(url_completa, tam_px=110):
     return img_qr
 
 def criar_card_qrcode_estilizado(url_site, cor_tema_rgb, tam_qr=100):
-    url_limpa = str(url_site).strip() if url_site"
+    url_limpa = str(url_site)
     url_completa = url_limpa if url_limpa.startswith(("http://", "https://")) else "https://" + url_limpa
 
     img_qr = gerar_imagem_qrcode(url_completa, tam_px=tam_qr)
