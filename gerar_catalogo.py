@@ -205,13 +205,13 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
 
     larg_util = LARGURA_TOTAL - (MARGEM_LATERAL * 2)
     larg_card_norm_padrao = (larg_util - (ESPACO_HORIZ * (cols_normal_base - 1))) // cols_normal_base
+    x_inicial_norm_fixo = MARGEM_LATERAL
 
     alt_card_dest = 600
     alt_card_norm = 420
 
     while True:
         current_dest = []
-        # Aceita ate 3 destaques no topo
         if pag_num == 1 and queue_dest:
             n_cap = min(3, len(queue_dest))
             current_dest = queue_dest[:n_cap]
@@ -254,7 +254,6 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
         y_cursor = MARGEM_TOPO_CONTEUDO
         if current_dest:
             qtd_d = len(current_dest)
-            # Calcula a largura dinamica para se adequar a 1, 2 ou 3 itens
             larg_card_dest = (larg_util - (ESPACO_HORIZ * (qtd_d - 1))) // qtd_d
             largura_linha_d = (qtd_d * larg_card_dest) + ((qtd_d - 1) * ESPACO_HORIZ)
             x_inicial_d = (LARGURA_TOTAL - largura_linha_d) // 2
@@ -306,17 +305,11 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
 
         # 3. Produtos Normais
         if current_norm:
-            total_normais = len(current_norm)
-            
             for idx, prod in enumerate(current_norm):
                 row = idx // cols_normal_base
                 col = idx % cols_normal_base
 
-                itens_na_linha = min(cols_normal_base, total_normais - (row * cols_normal_base))
-                largura_linha_n = (itens_na_linha * larg_card_norm_padrao) + ((itens_na_linha - 1) * ESPACO_HORIZ)
-                x_inicial_n = (LARGURA_TOTAL - largura_linha_n) // 2
-                
-                x = x_inicial_n + col * (larg_card_norm_padrao + ESPACO_HORIZ)
+                x = x_inicial_norm_fixo + col * (larg_card_norm_padrao + ESPACO_HORIZ)
                 y = y_cursor + row * (alt_card_norm + ESPACO_VERT)
 
                 draw.rounded_rectangle([x, y, x + larg_card_norm_padrao, y + alt_card_norm], radius=10, outline="#E0E0E0", fill="#FFFFFF", width=2)
