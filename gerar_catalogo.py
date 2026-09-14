@@ -137,7 +137,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
     prods_destaque = [p for p in produtos if str(p.get('destaque', '')).strip().upper() == 'S']
     prods_normais = [p for p in produtos if str(p.get('destaque', '')).strip().upper() != 'S']
 
-    # DIMENSÕES RIGIDAMENTE FIXAS PARA TODAS AS PÁGINAS (CANVAS PADRÃO 1600x2300)
+    # DIMENSÕES RIGIDAMENTE FIXAS PARA TODAS AS PÁGINAS (1600x2300)
     LARGURA_TOTAL = 1600
     ALTURA_TOTAL_FIXA = 2300
     MARGEM_LATERAL = 40
@@ -229,10 +229,11 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
             current_norm = queue_norm[:max_items_page]
             queue_norm = queue_norm[max_items_page:]
 
-        if not current_dest and not current_norm and pag_num > 1:
+        # Garante a interrupção apenas a partir da página 2 se não houver mais dados a renderizar
+        if pag_num > 1 and not current_dest and not current_norm:
             break
 
-        # CRIAR IMAGEM COM ALTURA E LARGURA ESTRITAMENTE FIXAS
+        # CRIAR IMAGEM COM ALTURA E LARGURA FIXAS
         img = Image.new("RGB", (LARGURA_TOTAL, ALTURA_TOTAL_FIXA), color=cor_fundo_demais)
         draw = ImageDraw.Draw(img)
 
