@@ -133,7 +133,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
     prods_normais = [p for p in produtos if str(p.get('destaque', '')).strip().upper() != 'S']
 
     LARGURA_TOTAL = 1600
-    ALTURA_TOTAL = 2500  # <--- ALTURA FIXA PADRONIZADA PARA TODAS AS PÁGINAS
+    ALTURA_FIXA_FINAL = 2500  # <--- Tamanho fixo padronizado do canvas final
     MARGEM_LATERAL = 40
     ESPACO_HORIZ = 20
     ESPACO_VERT = 20
@@ -196,6 +196,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
     queue_norm = list(prods_normais)
 
     pag_num = 1
+    MAX_ALTURA_PAGINA = 2500
 
     cols_destaque_base = 3
     cols_normal_base = 4
@@ -214,7 +215,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
             current_dest = queue_dest[:n_cap]
             queue_dest = queue_dest[n_cap:]
 
-        alt_disponivel = ALTURA_TOTAL - MARGEM_TOPO_CONTEUDO - ALTURA_RODAPE
+        alt_disponivel = MAX_ALTURA_PAGINA - MARGEM_TOPO_CONTEUDO - ALTURA_RODAPE
         if current_dest:
             alt_disponivel -= (alt_card_dest + ESPACO_VERT)
 
@@ -229,7 +230,8 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
         if not current_dest and not current_norm and pag_num > 1:
             break
 
-        img = Image.new("RGB", (LARGURA_TOTAL, ALTURA_TOTAL), color=cor_fundo_demais)
+        # Garante que a imagem sempre tenha o tamanho fixo padrão para a exibição ficar perfeita
+        img = Image.new("RGB", (LARGURA_TOTAL, ALTURA_FIXA_FINAL), color=cor_fundo_demais)
         draw = ImageDraw.Draw(img)
 
         # 1. Cabecalho
@@ -344,9 +346,9 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
                 preco_fmt = str(prod.get('preco', '')).strip()
                 draw.text((x + larg_card_norm_padrao//2, tarja_y1 + (tarja_y2 - tarja_y1)//2), preco_fmt, fill=cor_preco_texto, font=font_preco_normal, anchor="mm")
 
-        # 4. Rodape com QR Code no fundo da pagina (posição constante)
-        y_rodape = ALTURA_TOTAL - ALTURA_RODAPE
-        draw.rectangle([0, y_rodape, LARGURA_TOTAL, ALTURA_TOTAL], fill=cor_rodape_bg)
+        # 4. Rodape com QR Code fixo no fundo
+        y_rodape = ALTURA_FIXA_FINAL - ALTURA_RODAPE
+        draw.rectangle([0, y_rodape, LARGURA_TOTAL, ALTURA_FIXA_FINAL], fill=cor_rodape_bg)
 
         site_url = config.get('cabecalho_site') or config.get('rodape_site') or 'www.oestepharma.com.br'
         
