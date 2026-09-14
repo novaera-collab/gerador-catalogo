@@ -134,6 +134,10 @@ def limpar_jpgs_antigos(caminho_saida_base):
         pass
 
 def renderizar_catalogo(config, produtos, caminho_saida_base):
+    if not produtos:
+        print("Aviso: A lista de produtos fornecida está vazia.")
+        return
+
     prods_destaque = [p for p in produtos if str(p.get('destaque', '')).strip().upper() == 'S']
     prods_normais = [p for p in produtos if str(p.get('destaque', '')).strip().upper() != 'S']
 
@@ -175,6 +179,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
     if os.path.exists(cabecalho_path):
         try:
             img_cabecalho = Image.open(cabecalho_path).convert("RGB")
+            # Força o redimensionamento exato para LARGURA_TOTAL para prevenir variações
             proporcao = LARGURA_TOTAL / float(img_cabecalho.width)
             nova_altura = int(float(img_cabecalho.height) * proporcao)
             img_cabecalho = img_cabecalho.resize((LARGURA_TOTAL, nova_altura), Image.Resampling.LANCZOS)
@@ -229,11 +234,10 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
             current_norm = queue_norm[:max_items_page]
             queue_norm = queue_norm[max_items_page:]
 
-        # Garante a interrupção apenas a partir da página 2 se não houver mais dados a renderizar
         if pag_num > 1 and not current_dest and not current_norm:
             break
 
-        # CRIAR IMAGEM COM ALTURA E LARGURA FIXAS
+        # Canvas rígido para garantir que a largura seja idêntica em todas as páginas
         img = Image.new("RGB", (LARGURA_TOTAL, ALTURA_TOTAL_FIXA), color=cor_fundo_demais)
         draw = ImageDraw.Draw(img)
 
