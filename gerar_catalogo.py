@@ -44,7 +44,6 @@ def carregar_e_ajustar_imagem(caminho, largura_max, altura_max, fundo_cor=None):
         return None
 
 def gerar_imagem_qrcode(url_completa, tam_px=110):
-    # 1. Tenta gerar via biblioteca local se disponível
     if HAS_QRCODE:
         try:
             qr = qrcode.QRCode(
@@ -60,7 +59,6 @@ def gerar_imagem_qrcode(url_completa, tam_px=110):
         except Exception:
             pass
 
-    # 2. Tenta gerar via API do Google Charts caso não tenha a lib local
     try:
         url_encoded = urllib.parse.quote(url_completa)
         api_url = f"https://chart.googleapis.com/chart?cht=qr&chs={tam_px}x{tam_px}&chl={url_encoded}&choe=UTF-8"
@@ -72,7 +70,6 @@ def gerar_imagem_qrcode(url_completa, tam_px=110):
     except Exception:
         pass
 
-    # 3. Fallback visual seguro
     img_qr = Image.new("RGB", (tam_px, tam_px), (255, 255, 255))
     d_qr = ImageDraw.Draw(img_qr)
     d_qr.rectangle([2, 2, tam_px-3, tam_px-3], outline=(0, 0, 0), width=2)
@@ -136,6 +133,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
     prods_normais = [p for p in produtos if str(p.get('destaque', '')).strip().upper() != 'S']
 
     LARGURA_TOTAL = 1600
+    ALTURA_TOTAL = 2500  # <--- ALTURA FIXA PADRONIZADA PARA TODAS AS PÁGINAS
     MARGEM_LATERAL = 40
     ESPACO_HORIZ = 20
     ESPACO_VERT = 20
@@ -198,7 +196,6 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
     queue_norm = list(prods_normais)
 
     pag_num = 1
-    MAX_ALTURA_PAGINA = 2500
 
     cols_destaque_base = 3
     cols_normal_base = 4
@@ -217,7 +214,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
             current_dest = queue_dest[:n_cap]
             queue_dest = queue_dest[n_cap:]
 
-        alt_disponivel = MAX_ALTURA_PAGINA - MARGEM_TOPO_CONTEUDO - ALTURA_RODAPE
+        alt_disponivel = ALTURA_TOTAL - MARGEM_TOPO_CONTEUDO - ALTURA_RODAPE
         if current_dest:
             alt_disponivel -= (alt_card_dest + ESPACO_VERT)
 
@@ -229,14 +226,8 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
             current_norm = queue_norm[:max_items_page]
             queue_norm = queue_norm[max_items_page:]
 
-        # Se não houver nem destaques nem normais nesta iteração (após a pag 1), finaliza o loop
         if not current_dest and not current_norm and pag_num > 1:
             break
-
-        num_rows_norm = (len(current_norm) + cols_normal_base - 1) // cols_normal_base if current_norm else 0
-        conteudo_h = (alt_card_dest + ESPACO_VERT if current_dest else 0) + (num_rows_norm * (alt_card_norm + ESPACO_VERT))
-        
-        ALTURA_TOTAL = MARGEM_TOPO_CONTEUDO + conteudo_h + ALTURA_RODAPE + 10
 
         img = Image.new("RGB", (LARGURA_TOTAL, ALTURA_TOTAL), color=cor_fundo_demais)
         draw = ImageDraw.Draw(img)
@@ -319,11 +310,9 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
 
                 draw.rounded_rectangle([x, y, x + larg_card_norm_padrao, y + alt_card_norm], radius=10, outline="#E0E0E0", fill="#FFFFFF", width=2)
 
-                # Código do Produto na esquerda
                 cod_str = str(prod.get('codigo', '')).zfill(5)
                 draw.text((x + 12, y + 15), f"CÓD: {cod_str}", fill="#000000", font=font_cod_bold)
 
-                # Marca do Produto na Direita quando NAO é destaque
                 marca_str = str(prod.get('marca', '')).upper()
                 if marca_str:
                     draw.text((x + larg_card_norm_padrao - 12, y + 16), marca_str, fill="#666666", font=font_marca_normal, anchor="ra")
@@ -355,7 +344,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
                 preco_fmt = str(prod.get('preco', '')).strip()
                 draw.text((x + larg_card_norm_padrao//2, tarja_y1 + (tarja_y2 - tarja_y1)//2), preco_fmt, fill=cor_preco_texto, font=font_preco_normal, anchor="mm")
 
-        # 4. Rodape com QR Code
+        # 4. Rodape com QR Code no fundo da pagina (posição constante)
         y_rodape = ALTURA_TOTAL - ALTURA_RODAPE
         draw.rectangle([0, y_rodape, LARGURA_TOTAL, ALTURA_TOTAL], fill=cor_rodape_bg)
 
