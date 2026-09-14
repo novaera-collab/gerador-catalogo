@@ -137,8 +137,9 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
     prods_destaque = [p for p in produtos if str(p.get('destaque', '')).strip().upper() == 'S']
     prods_normais = [p for p in produtos if str(p.get('destaque', '')).strip().upper() != 'S']
 
-    # LARGURA RIGIDAMENTE FIXADA
+    # DIMENSÕES RIGIDAMENTE FIXAS PARA TODAS AS PÁGINAS (CANVAS PADRÃO 1600x2300)
     LARGURA_TOTAL = 1600
+    ALTURA_TOTAL_FIXA = 2300
     MARGEM_LATERAL = 40
     ESPACO_HORIZ = 20
     ESPACO_VERT = 20
@@ -174,10 +175,9 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
     if os.path.exists(cabecalho_path):
         try:
             img_cabecalho = Image.open(cabecalho_path).convert("RGB")
-            if img_cabecalho.width != LARGURA_TOTAL:
-                proporcao = LARGURA_TOTAL / float(img_cabecalho.width)
-                nova_altura = int(float(img_cabecalho.height) * proporcao)
-                img_cabecalho = img_cabecalho.resize((LARGURA_TOTAL, nova_altura), Image.Resampling.LANCZOS)
+            proporcao = LARGURA_TOTAL / float(img_cabecalho.width)
+            nova_altura = int(float(img_cabecalho.height) * proporcao)
+            img_cabecalho = img_cabecalho.resize((LARGURA_TOTAL, nova_altura), Image.Resampling.LANCZOS)
         except Exception:
             img_cabecalho = None
 
@@ -201,10 +201,8 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
     queue_norm = list(prods_normais)
 
     pag_num = 1
-    MAX_ALTURA_PAGINA = 2500
     cols_normal_base = 4
 
-    # CÁLCULO FIXO DE DIMENSÃO BASEADO EM 4 COLUNAS FIXAS
     larg_util = LARGURA_TOTAL - (MARGEM_LATERAL * 2)
     larg_card_norm_padrao = (larg_util - (ESPACO_HORIZ * (cols_normal_base - 1))) // cols_normal_base
     x_inicial_norm_fixo = MARGEM_LATERAL
@@ -219,7 +217,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
             current_dest = queue_dest[:n_cap]
             queue_dest = queue_dest[n_cap:]
 
-        alt_disponivel = MAX_ALTURA_PAGINA - MARGEM_TOPO_CONTEUDO - ALTURA_RODAPE
+        alt_disponivel = ALTURA_TOTAL_FIXA - MARGEM_TOPO_CONTEUDO - ALTURA_RODAPE
         if current_dest:
             alt_disponivel -= (alt_card_dest + ESPACO_VERT)
 
@@ -234,13 +232,8 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
         if not current_dest and not current_norm and pag_num > 1:
             break
 
-        num_rows_norm = (len(current_norm) + cols_normal_base - 1) // cols_normal_base if current_norm else 0
-        conteudo_h = (alt_card_dest + ESPACO_VERT if current_dest else 0) + (num_rows_norm * (alt_card_norm + ESPACO_VERT))
-        
-        ALTURA_TOTAL = MARGEM_TOPO_CONTEUDO + conteudo_h + ALTURA_RODAPE + 8
-
-        # CRIAÇÃO DO CANVAS RIGIDAMENTE EM 1600 PIXELS
-        img = Image.new("RGB", (LARGURA_TOTAL, ALTURA_TOTAL), color=cor_fundo_demais)
+        # CRIAR IMAGEM COM ALTURA E LARGURA ESTRITAMENTE FIXAS
+        img = Image.new("RGB", (LARGURA_TOTAL, ALTURA_TOTAL_FIXA), color=cor_fundo_demais)
         draw = ImageDraw.Draw(img)
 
         # 1. Cabeçalho
@@ -306,7 +299,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
 
             y_cursor += alt_card_dest + ESPACO_VERT
 
-        # 3. Produtos Normais (Alinhamento constante em 4 colunas)
+        # 3. Produtos Normais
         if current_norm:
             for idx, prod in enumerate(current_norm):
                 row = idx // cols_normal_base
@@ -351,9 +344,9 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
                 preco_fmt = str(prod.get('preco', '')).strip()
                 draw.text((x + larg_card_norm_padrao//2, tarja_y1 + (tarja_y2 - tarja_y1)//2), preco_fmt, fill=cor_preco_texto, font=font_preco_normal, anchor="mm")
 
-        # 4. Rodapé
-        y_rodape = ALTURA_TOTAL - ALTURA_RODAPE
-        draw.rectangle([0, y_rodape, LARGURA_TOTAL, ALTURA_TOTAL], fill=cor_rodape_bg)
+        # 4. Rodapé Fixado na Parte Inferior da Página
+        y_rodape = ALTURA_TOTAL_FIXA - ALTURA_RODAPE
+        draw.rectangle([0, y_rodape, LARGURA_TOTAL, ALTURA_TOTAL_FIXA], fill=cor_rodape_bg)
 
         site_url = config.get('cabecalho_site') or config.get('rodape_site') or 'www.oestepharma.com.br'
         
