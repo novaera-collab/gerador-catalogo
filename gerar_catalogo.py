@@ -137,6 +137,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
     prods_destaque = [p for p in produtos if str(p.get('destaque', '')).strip().upper() == 'S']
     prods_normais = [p for p in produtos if str(p.get('destaque', '')).strip().upper() != 'S']
 
+    # LARGURA RIGIDAMENTE FIXADA
     LARGURA_TOTAL = 1600
     MARGEM_LATERAL = 40
     ESPACO_HORIZ = 20
@@ -203,6 +204,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
     MAX_ALTURA_PAGINA = 2500
     cols_normal_base = 4
 
+    # CÁLCULO FIXO DE DIMENSÃO BASEADO EM 4 COLUNAS FIXAS
     larg_util = LARGURA_TOTAL - (MARGEM_LATERAL * 2)
     larg_card_norm_padrao = (larg_util - (ESPACO_HORIZ * (cols_normal_base - 1))) // cols_normal_base
     x_inicial_norm_fixo = MARGEM_LATERAL
@@ -237,10 +239,11 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
         
         ALTURA_TOTAL = MARGEM_TOPO_CONTEUDO + conteudo_h + ALTURA_RODAPE + 8
 
+        # CRIAÇÃO DO CANVAS RIGIDAMENTE EM 1600 PIXELS
         img = Image.new("RGB", (LARGURA_TOTAL, ALTURA_TOTAL), color=cor_fundo_demais)
         draw = ImageDraw.Draw(img)
 
-        # 1. Cabecalho
+        # 1. Cabeçalho
         if img_cabecalho:
             img.paste(img_cabecalho, (0, 0))
         else:
@@ -250,7 +253,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
         pos_y_titulo = int(ALTURA_CABECALHO * 0.72)
         draw.text((LARGURA_TOTAL // 2, pos_y_titulo), titulo_principal, fill="#FFFFFF", font=font_sub_titulo, anchor="mm")
 
-        # 2. Destaques (1, 2 ou 3 prods)
+        # 2. Destaques
         y_cursor = MARGEM_TOPO_CONTEUDO
         if current_dest:
             qtd_d = len(current_dest)
@@ -303,7 +306,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
 
             y_cursor += alt_card_dest + ESPACO_VERT
 
-        # 3. Produtos Normais
+        # 3. Produtos Normais (Alinhamento constante em 4 colunas)
         if current_norm:
             for idx, prod in enumerate(current_norm):
                 row = idx // cols_normal_base
@@ -348,7 +351,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
                 preco_fmt = str(prod.get('preco', '')).strip()
                 draw.text((x + larg_card_norm_padrao//2, tarja_y1 + (tarja_y2 - tarja_y1)//2), preco_fmt, fill=cor_preco_texto, font=font_preco_normal, anchor="mm")
 
-        # 4. Rodape com QR Code
+        # 4. Rodapé
         y_rodape = ALTURA_TOTAL - ALTURA_RODAPE
         draw.rectangle([0, y_rodape, LARGURA_TOTAL, ALTURA_TOTAL], fill=cor_rodape_bg)
 
@@ -403,46 +406,3 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
 
         if not queue_dest and not queue_norm:
             break
-
-if __name__ == "__main__":
-    try:
-        if len(sys.argv) >= 2:
-            arquivo_csv = sys.argv[1]
-            saida_cli = sys.argv[2] if len(sys.argv) >= 3 else None
-
-            config = {}
-            produtos = []
-
-            if os.path.exists(arquivo_csv):
-                with open(arquivo_csv, mode='r', encoding='utf-8-sig') as f:
-                    linhas = f.readlines()
-                    lendo_produtos = False
-                    linhas_produtos = []
-
-                    for linha in linhas:
-                        linha_str = linha.strip()
-                        if not linha_str:
-                            continue
-
-                        if linha_str.lower().startswith('codigo;'):
-                            lendo_produtos = True
-                            linhas_produtos.append(linha_str)
-                            continue
-
-                        if not lendo_produtos:
-                            partes = linha_str.split(';')
-                            if len(partes) >= 2:
-                                config[partes[0].strip()] = partes[1].strip()
-                        else:
-                            linhas_produtos.append(linha_str)
-
-                    if linhas_produtos:
-                        reader = csv.DictReader(linhas_produtos, delimiter=';')
-                        for row in reader:
-                            produtos.append(row)
-
-            renderizar_catalogo(config, produtos, saida_cli)
-
-    except Exception as e:
-        with open("erro_log.txt", "w", encoding="utf-8") as f_err:
-            f_err.write(traceback.format_exc())
