@@ -44,7 +44,7 @@ def carregar_e_ajustar_imagem(caminho, largura_max, altura_max, fundo_cor=None):
         return None
 
 def gerar_imagem_qrcode(url_completa, tam_px=110):
-    # 1. Tenta gerar via biblioteca local se disponÃ­vel
+    # 1. Tenta gerar via biblioteca local se disponÃƒÂ­vel
     if HAS_QRCODE:
         try:
             qr = qrcode.QRCode(
@@ -60,7 +60,7 @@ def gerar_imagem_qrcode(url_completa, tam_px=110):
         except Exception:
             pass
 
-    # 2. Tenta gerar via API do Google Charts caso nÃ£o tenha a lib local
+    # 2. Tenta gerar via API do Google Charts caso nÃƒÂ£o tenha a lib local
     try:
         url_encoded = urllib.parse.quote(url_completa)
         api_url = f"https://chart.googleapis.com/chart?cht=qr&chs={tam_px}x{tam_px}&chl={url_encoded}&choe=UTF-8"
@@ -108,7 +108,7 @@ def criar_card_qrcode_estilizado(url_site, cor_tema_rgb, tam_qr=100):
     site_exibicao = url_limpa.replace("https://", "").replace("http://", "")
     draw.text((w_card // 2, y_tarja + 10), site_exibicao, fill="#FFFFFF", font=font_url, anchor="mm")
 
-    draw.text((w_card // 2, h_card - 14), "APONTE A CÃ‚MERA DO CELULAR", fill="#333333", font=font_sub, anchor="mm")
+    draw.text((w_card // 2, h_card - 14), "APONTE A CÃƒâ€šMERA DO CELULAR", fill="#333333", font=font_sub, anchor="mm")
     draw.text((w_card // 2, h_card - 5), "E ACESSE AGORA", fill="#333333", font=font_sub, anchor="mm")
 
     return card
@@ -200,7 +200,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
     pag_num = 1
     MAX_ALTURA_PAGINA = 2500
 
-    cols_destaque_base = 2
+    cols_destaque_base = 3
     cols_normal_base = 4
 
     larg_util = LARGURA_TOTAL - (MARGEM_LATERAL * 2)
@@ -264,7 +264,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
 
                 cod_str = str(prod.get('codigo', '')).zfill(5)
                 marca_str = str(prod.get('marca', '')).upper()
-                draw.text((x + larg_card_dest_padrao - 15, y_cursor + 27), f"CÃ“D: {cod_str}", fill="#555555", font=font_cod_bold, anchor="rm")
+                draw.text((x + larg_card_dest_padrao - 15, y_cursor + 27), f"CÃƒâ€œD: {cod_str}", fill="#555555", font=font_cod_bold, anchor="rm")
 
                 area_foto_x, area_foto_y = x + 15, y_cursor + 50
                 area_foto_w, area_foto_h = larg_card_dest_padrao - 30, 320
@@ -315,11 +315,11 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
 
                 draw.rounded_rectangle([x, y, x + larg_card_norm_padrao, y + alt_card_norm], radius=10, outline="#E0E0E0", fill="#FFFFFF", width=2)
 
-                # CÃ³digo do Produto na esquerda
+                # CÃƒÂ³digo do Produto na esquerda
                 cod_str = str(prod.get('codigo', '')).zfill(5)
-                draw.text((x + 12, y + 15), f"CÃ“D: {cod_str}", fill="#000000", font=font_cod_bold)
+                draw.text((x + 12, y + 15), f"CÃƒâ€œD: {cod_str}", fill="#000000", font=font_cod_bold)
 
-                # Marca do Produto na Direita quando NAO Ã© destaque
+                # Marca do Produto na Direita quando NAO ÃƒÂ© destaque
                 marca_str = str(prod.get('marca', '')).upper()
                 if marca_str:
                     draw.text((x + larg_card_norm_padrao - 12, y + 16), marca_str, fill="#666666", font=font_marca_normal, anchor="ra")
@@ -337,7 +337,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
                 else:
                     draw.text((area_foto_x + area_foto_w//2, area_foto_y + area_foto_h//2), "[ SEM FOTO ]", fill="#555555", font=font_marca, anchor="mm")
 
-                # Quebra de Linha com fonte um pouco maior e melhor espaÃ§amento
+                # Quebra de Linha com fonte um pouco maior e melhor espaÃƒÂ§amento
                 desc = str(prod.get('descricao', '')).upper()
                 linhas_desc = textwrap.wrap(desc, width=21)
                 y_texto = y + 242
@@ -394,7 +394,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
 
         validade_str = str(config.get('rodape_validade', '')).strip()
         if validade_str:
-            draw.text(((LARGURA_TOTAL + 150) // 2, y_rodape + 100), f"PreÃ§os vÃ¡lidos no perÃ­odo: {validade_str}", fill="#E0E0E0", font=font_rod_validade, anchor="mm")
+            draw.text(((LARGURA_TOTAL + 150) // 2, y_rodape + 100), f"PreÃƒÂ§os vÃƒÂ¡lidos no perÃƒÂ­odo: {validade_str}", fill="#E0E0E0", font=font_rod_validade, anchor="mm")
 
         tabela_str = str(config.get('rodape_tabela', '')).strip()
         if tabela_str:
