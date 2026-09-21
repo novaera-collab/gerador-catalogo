@@ -4,6 +4,7 @@ import csv
 import glob
 import traceback
 import textwrap
+import urllib.parse
 import urllib.request
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
@@ -59,9 +60,10 @@ def gerar_imagem_qrcode(url_completa, tam_px=110):
         except Exception:
             pass
 
+    # API ativa do QR Server (substitui o Google Charts descontinuado)
     try:
         url_encoded = urllib.parse.quote(url_completa)
-        api_url = f"https://chart.googleapis.com/chart?cht=qr&chs={tam_px}x{tam_px}&chl={url_encoded}&choe=UTF-8"
+        api_url = f"https://api.qrserver.com/v1/create-qr-code/?size={tam_px}x{tam_px}&data={url_encoded}&margin=2"
         req = urllib.request.Request(api_url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=5) as response:
             data = response.read()
@@ -70,43 +72,45 @@ def gerar_imagem_qrcode(url_completa, tam_px=110):
     except Exception:
         pass
 
+    # Fallback caso esteja sem conexão
     img_qr = Image.new("RGB", (tam_px, tam_px), (255, 255, 255))
     d_qr = ImageDraw.Draw(img_qr)
     d_qr.rectangle([2, 2, tam_px-3, tam_px-3], outline=(0, 0, 0), width=2)
     d_qr.text((tam_px//2, tam_px//2), "QR CODE", fill=(0, 0, 0), anchor="mm")
     return img_qr
 
-def criar_card_qrcode_estilizado(url_site, cor_tema_rgb, tam_qr=100):
+def criar_card_qrcode_estilizado(url_site, cor_tema_rgb, tam_qr=110):
     url_limpa = str(url_site).strip() if url_site else "www.oestepharma.com.br"
     url_completa = url_limpa if url_limpa.startswith(("http://", "https://")) else "https://" + url_limpa
 
     img_qr = gerar_imagem_qrcode(url_completa, tam_px=tam_qr)
 
-    w_card, h_card = tam_qr + 30, tam_qr + 85
+    # Dimensões do card ajustadas para não cortar texto
+    w_card, h_card = tam_qr + 40, tam_qr + 95
     card = Image.new("RGBA", (w_card, h_card), (255, 255, 255, 0))
     draw = ImageDraw.Draw(card)
 
     draw.rounded_rectangle([0, 0, w_card, h_card], radius=12, fill="#FFFFFF")
-    draw.rounded_rectangle([8, 5, w_card - 8, 28], radius=8, fill=cor_tema_rgb)
+    draw.rounded_rectangle([6, 5, w_card - 6, 28], radius=8, fill=cor_tema_rgb)
     
     try:
         font_hdr = ImageFont.truetype("arialbd.ttf", 10)
-        font_sub = ImageFont.truetype("arialbd.ttf", 9)
-        font_url = ImageFont.truetype("arialbd.ttf", 10)
+        font_sub = ImageFont.truetype("arialbd.ttf", 8)
+        font_url = ImageFont.truetype("arialbd.ttf", 9)
     except IOError:
         font_hdr = font_sub = font_url = ImageFont.load_default()
 
     draw.text((w_card // 2, 16), "ACESSE NOSSO SITE", fill="#FFFFFF", font=font_hdr, anchor="mm")
-    card.paste(img_qr, (15, 33))
+    card.paste(img_qr, (20, 33))
 
-    y_tarja = 33 + tam_qr + 8
-    draw.rounded_rectangle([8, y_tarja, w_card - 8, y_tarja + 20], radius=8, fill=cor_tema_rgb)
+    y_tarja = 33 + tam_qr + 6
+    draw.rounded_rectangle([6, y_tarja, w_card - 6, y_tarja + 20], radius=8, fill=cor_tema_rgb)
     
     site_exibicao = url_limpa.replace("https://", "").replace("http://", "")
     draw.text((w_card // 2, y_tarja + 10), site_exibicao, fill="#FFFFFF", font=font_url, anchor="mm")
 
-    draw.text((w_card // 2, h_card - 14), "APONTE A CÂMERA DO CELULAR", fill="#333333", font=font_sub, anchor="mm")
-    draw.text((w_card // 2, h_card - 5), "E ACESSE AGORA", fill="#333333", font=font_sub, anchor="mm")
+    draw.text((w_card // 2, h_card - 16), "APONTE A CÂMERA DO CELULAR", fill="#333333", font=font_sub, anchor="mm")
+    draw.text((w_card // 2, h_card - 6), "E ACESSE AGORA", fill="#333333", font=font_sub, anchor="mm")
 
     return card
 
@@ -133,7 +137,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
     prods_normais = [p for p in produtos if str(p.get('destaque', '')).strip().upper() != 'S']
 
     LARGURA_TOTAL = 1600
-    ALTURA_FIXA_FINAL = 2500  # <--- Tamanho fixo padronizado do canvas final
+    ALTURA_FIXA_FINAL = 2500
     MARGEM_LATERAL = 40
     ESPACO_HORIZ = 20
     ESPACO_VERT = 20
@@ -230,7 +234,6 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
         if not current_dest and not current_norm and pag_num > 1:
             break
 
-        # Garante que a imagem sempre tenha o tamanho fixo padrão para a exibição ficar perfeita
         img = Image.new("RGB", (LARGURA_TOTAL, ALTURA_FIXA_FINAL), color=cor_fundo_demais)
         draw = ImageDraw.Draw(img)
 
@@ -346,13 +349,13 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
                 preco_fmt = str(prod.get('preco', '')).strip()
                 draw.text((x + larg_card_norm_padrao//2, tarja_y1 + (tarja_y2 - tarja_y1)//2), preco_fmt, fill=cor_preco_texto, font=font_preco_normal, anchor="mm")
 
-        # 4. Rodape com QR Code fixo no fundo
+        # 4. Rodape com QR Code
         y_rodape = ALTURA_FIXA_FINAL - ALTURA_RODAPE
         draw.rectangle([0, y_rodape, LARGURA_TOTAL, ALTURA_FIXA_FINAL], fill=cor_rodape_bg)
 
         site_url = config.get('cabecalho_site') or config.get('rodape_site') or 'www.oestepharma.com.br'
         
-        card_qr = criar_card_qrcode_estilizado(site_url, cor_rodape_bg, tam_qr=100)
+        card_qr = criar_card_qrcode_estilizado(site_url, cor_rodape_bg, tam_qr=110)
         qr_x = MARGEM_LATERAL + 10
         qr_y = y_rodape + 10
         img.paste(card_qr, (qr_x, qr_y), card_qr)
