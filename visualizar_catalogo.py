@@ -88,24 +88,6 @@ def limpar_numero_whatsapp(fone_raw):
         return "55" + apenas_numeros
     return apenas_numeros
 
-def criar_imagem_degrade(largura, altura, cor_topo="#120024", cor_fim="#5B0098"):
-    """Gera uma imagem de fundo em degradê vertical para o Tkinter"""
-    largura = max(1, largura)
-    altura = max(1, altura)
-    base = Image.new("RGB", (largura, altura))
-    draw = ImageDraw.Draw(base)
-    
-    r1, g1, b1 = int(cor_topo[1:3], 16), int(cor_topo[3:5], 16), int(cor_topo[5:7], 16)
-    r2, g2, b2 = int(cor_fim[1:3], 16), int(cor_fim[3:5], 16), int(cor_fim[5:7], 16)
-
-    for y in range(altura):
-        r = int(r1 + (r2 - r1) * (y / altura))
-        g = int(g1 + (g2 - g1) * (y / altura))
-        b = int(b1 + (b2 - b1) * (y / altura))
-        draw.line([(0, y), (largura, y)], fill=(r, g, b))
-        
-    return ImageTk.PhotoImage(base)
-
 class AppVisualizador:
     def __init__(self, root, pasta_parametros="", jpg_path=""):
         self.root = root
@@ -114,6 +96,7 @@ class AppVisualizador:
         # Mapeamento de páginas geradas
         self.lista_paginas = []
         self.indice_atual = 0
+        self.zoom_fator = 1.0  # Fator de escala do Zoom
 
         # Define caminho do CSV associado para ler os metadados
         base_path = os.path.splitext(self.jpg_path)[0] if self.jpg_path else ""
@@ -123,7 +106,13 @@ class AppVisualizador:
         self.num_whats = limpar_numero_whatsapp(self.meta.get('fone', ''))
 
         self.root.title("Zé do Encarte - Visualizador e Gerador de Ofertas")
-        self.root.geometry("1180x800")
+        
+        # SUBIR TELA: Define estado maximizado de fábrica
+        try:
+            self.root.state('zoomed')
+        except Exception:
+            self.root.geometry("1280x850")
+            
         self.root.configure(bg="#120024")
         
         # Traz a janela para a frente
@@ -153,7 +142,7 @@ class AppVisualizador:
         )
         lbl_status.pack(side="left", padx=5)
 
-        # BOTÕES HARMONIZADOS COM A PALETA
+        # BOTÕES SUPERIORES
         btn_whats = tk.Button(
             self.frame_topo, 
             text="💬 Copiar e Abrir Whats", 
@@ -221,7 +210,7 @@ class AppVisualizador:
         )
         btn_pasta.pack(side="right", padx=4)
 
-        # BARRA DE NAVEGAÇÃO DE PÁGINAS (ROXO ESCURO)
+        # BARRA DE NAVEGAÇÃO DE PÁGINAS E ZOOM
         frame_nav = tk.Frame(self.root, bg="#1D0036")
         frame_nav.pack(fill="x", side="top", ipady=3)
 
@@ -237,29 +226,97 @@ class AppVisualizador:
         )
         self.lbl_paginacao.pack(side="left", expand=True)
 
+        # BOTÕES DE CONTROLO DE ZOOM
+        frame_zoom = tk.Frame(frame_nav, bg="#1D0036")
+        frame_zoom.pack(side="right", padx=15)
+
+        btn_zoom_out = tk.Button(
+            frame_zoom, text="🔍 -", font=("Segoe UI", 9, "bold"), bg="#3B0066", fg="#FFFFFF",
+            activebackground="#FF007F", activeforeground="white", bd=1, relief="solid",
+            padx=6, pady=1, cursor="hand2", command=self.diminuir_zoom
+        )
+        btn_zoom_out.pack(side="left", padx=2)
+
+        self.lbl_zoom = tk.Label(
+            frame_zoom, text="100%", font=("Segoe UI", 9, "bold"), fg="#FFB6C1", bg="#1D0036", width=5
+        )
+        self.lbl_zoom.pack(side="left", padx=2)
+
+        btn_zoom_in = tk.Button(
+            frame_zoom, text="🔍 +", font=("Segoe UI", 9, "bold"), bg="#3B0066", fg="#FFFFFF",
+            activebackground="#FF007F", activeforeground="white", bd=1, relief="solid",
+            padx=6, pady=1, cursor="hand2", command=self.aumentar_zoom
+        )
+        btn_zoom_in.pack(side="left", padx=2)
+
+        btn_zoom_reset = tk.Button(
+            frame_zoom, text="1:1", font=("Segoe UI", 8, "bold"), bg="#2A0042", fg="#E0E0E0",
+            activebackground="#3B0066", activeforeground="white", bd=1, relief="solid",
+            padx=4, pady=1, cursor="hand2", command=self.resetar_zoom
+        )
+        btn_zoom_reset.pack(side="left", padx=(4, 10))
+
         self.btn_prox = tk.Button(
             frame_nav, text="Próximo ▶", font=("Segoe UI", 9, "bold"), bg="#3B0066", fg="#FFFFFF",
             activebackground="#FF007F", activeforeground="white", bd=0, padx=10,
             state="disabled", command=self.proxima_pagina, cursor="hand2"
         )
-        self.btn_prox.pack(side="right", padx=15)
+        self.btn_prox.pack(side="right", padx=5)
 
-        # PAINEL CENTRAL DE VISUALIZAÇÃO
-        self.canvas = tk.Canvas(self.root, bg="#120024", highlightthickness=0)
-        self.canvas.pack(fill="both", expand=True)
-        self.canvas.bind("<Configure>", self.redimensionar_fundo)
+        # PAINEL CENTRAL COM SCROLLBARS (PERMITE ROLAR A PÁGINA)
+        self.container_canvas = tk.Frame(self.root, bg="#120024")
+        self.container_canvas.pack(fill="both", expand=True)
 
-        self.fundo_img_tk = None
+        self.v_scrollbar = tk.Scrollbar(self.container_canvas, orient="vertical")
+        self.v_scrollbar.pack(side="right", fill="y")
+
+        self.h_scrollbar = tk.Scrollbar(self.container_canvas, orient="horizontal")
+        self.h_scrollbar.pack(side="bottom", fill="x")
+
+        self.canvas = tk.Canvas(
+            self.container_canvas, 
+            bg="#120024", 
+            highlightthickness=0,
+            yscrollcommand=self.v_scrollbar.set,
+            xscrollcommand=self.h_scrollbar.set
+        )
+        self.canvas.pack(side="left", fill="both", expand=True)
+
+        self.v_scrollbar.config(command=self.canvas.yview)
+        self.h_scrollbar.config(command=self.canvas.xview)
+
+        # Eventos do Scroll do Rato
+        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
 
         # Carregamento imediato ao abrir
         self.root.after(100, self.atualizar_paginas)
 
-    def redimensionar_fundo(self, event):
-        """Atualiza o fundo degradê quando a janela é redimensionada"""
-        w, h = event.width, event.height
-        if w > 10 and h > 10:
-            self.fundo_img_tk = criar_imagem_degrade(w, h, cor_topo="#120024", cor_fim="#4A0078")
+    def _on_mousewheel(self, event):
+        """Suporte para rolar a página com a roda do rato (Mouse Wheel)"""
+        if event.state & 0x0004:  # Se CTRL estiver pressionado, altera o Zoom
+            if event.delta > 0:
+                self.aumentar_zoom()
+            else:
+                self.diminuir_zoom()
+        else:
+            self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+    def aumentar_zoom(self):
+        if self.zoom_fator < 3.0:
+            self.zoom_fator += 0.2
+            self.lbl_zoom.config(text=f"{int(self.zoom_fator * 100)}%")
             self.atualizar_visualizacao()
+
+    def diminuir_zoom(self):
+        if self.zoom_fator > 0.4:
+            self.zoom_fator -= 0.2
+            self.lbl_zoom.config(text=f"{int(self.zoom_fator * 100)}%")
+            self.atualizar_visualizacao()
+
+    def resetar_zoom(self):
+        self.zoom_fator = 1.0
+        self.lbl_zoom.config(text="100%")
+        self.atualizar_visualizacao()
 
     def localizar_paginas_geradas(self, caminho_base):
         """Captura todas as páginas geradas e aplica fallback caso o caminho exato varie."""
@@ -280,7 +337,6 @@ class AppVisualizador:
                     if sem_ext == nome_limpo or sem_ext.startswith(nome_limpo + "_"):
                         arquivos_encontrados.append(caminho_completo)
 
-            # FALLBACK: Se não encontrou pelo nome direto do parâmetro, busca imagens na pasta
             if not arquivos_encontrados:
                 for f in os.listdir(pasta):
                     if f.lower().endswith(('.jpg', '.jpeg')):
@@ -313,14 +369,11 @@ class AppVisualizador:
         self.atualizar_visualizacao()
 
     def atualizar_visualizacao(self):
-        """Redesenha a tela conforme a página selecionada"""
+        """Redesenha a tela conforme a página selecionada, aplicando Zoom e Scroll"""
         self.canvas.delete("all")
 
         w_canv = self.canvas.winfo_width()
         h_canv = self.canvas.winfo_height()
-        
-        if self.fundo_img_tk:
-            self.canvas.create_image(0, 0, image=self.fundo_img_tk, anchor="nw")
 
         if not self.lista_paginas:
             cx = w_canv // 2 if w_canv > 50 else 590
@@ -346,18 +399,28 @@ class AppVisualizador:
             self.pil_img = Image.open(caminho_atual)
             img_w, img_h = self.pil_img.size
             
+            # Ajuste base de tamanho à janela + multiplicador de zoom
             max_w = max(300, w_canv - 60) if w_canv > 60 else 1050
             max_h = max(300, h_canv - 40) if h_canv > 40 else 650
             
-            ratio = min(max_w / img_w, max_h / img_h)
-            novo_tamanho = (int(img_w * ratio), int(img_h * ratio))
+            base_ratio = min(max_w / img_w, max_h / img_h)
+            
+            # Aplica o fator de zoom selecionado pelo utilizador
+            final_w = int(img_w * base_ratio * self.zoom_fator)
+            final_h = int(img_h * base_ratio * self.zoom_fator)
 
-            img_resized = self.pil_img.resize(novo_tamanho, Image.Resampling.LANCZOS)
+            img_resized = self.pil_img.resize((final_w, final_h), Image.Resampling.LANCZOS)
             self.tk_img = ImageTk.PhotoImage(img_resized)
 
-            cx = w_canv // 2 if w_canv > 50 else 590
-            cy = h_canv // 2 if h_canv > 50 else 330
-            self.canvas.create_image(cx, cy, image=self.tk_img, anchor="center")
+            # Centralização ou alinhamento com área rolável
+            pos_x = max(w_canv // 2, final_w // 2 + 10)
+            pos_y = max(h_canv // 2, final_h // 2 + 10)
+
+            self.canvas.create_image(pos_x, pos_y, image=self.tk_img, anchor="center")
+            
+            # Atualiza os limites de rolagem (ScrollRegion)
+            self.canvas.config(scrollregion=(0, 0, max(w_canv, final_w + 40), max(h_canv, final_h + 40)))
+
         except Exception as e:
             cx = w_canv // 2 if w_canv > 50 else 590
             cy = h_canv // 2 if h_canv > 50 else 350
