@@ -90,6 +90,8 @@ def limpar_numero_whatsapp(fone_raw):
 
 def criar_imagem_degrade(largura, altura, cor_topo="#120024", cor_fim="#5B0098"):
     """Gera uma imagem de fundo em degradê vertical para o Tkinter"""
+    largura = max(1, largura)
+    altura = max(1, altura)
     base = Image.new("RGB", (largura, altura))
     draw = ImageDraw.Draw(base)
     
@@ -219,7 +221,7 @@ class AppVisualizador:
         )
         btn_pasta.pack(side="right", padx=4)
 
-        # BARRA DE NAVEGAÇÃO DE PÁGINAS (ROXO ESCURO / INTERMÉDIO)
+        # BARRA DE NAVEGAÇÃO DE PÁGINAS (ROXO ESCURO)
         frame_nav = tk.Frame(self.root, bg="#1D0036")
         frame_nav.pack(fill="x", side="top", ipady=3)
 
@@ -242,14 +244,14 @@ class AppVisualizador:
         )
         self.btn_prox.pack(side="right", padx=15)
 
-        # PAINEL CENTRAL DE VISUALIZAÇÃO COM CANVAS
+        # PAINEL CENTRAL DE VISUALIZAÇÃO
         self.canvas = tk.Canvas(self.root, bg="#120024", highlightthickness=0)
         self.canvas.pack(fill="both", expand=True)
         self.canvas.bind("<Configure>", self.redimensionar_fundo)
 
         self.fundo_img_tk = None
 
-        # CORREÇÃO DO BUG: Força atualização automática ao inicializar a interface
+        # Carregamento imediato ao abrir
         self.root.after(100, self.atualizar_paginas)
 
     def redimensionar_fundo(self, event):
@@ -260,7 +262,7 @@ class AppVisualizador:
             self.atualizar_visualizacao()
 
     def localizar_paginas_geradas(self, caminho_base):
-        """Captura todas as páginas e fallback inteligente se não encontrar pelo nome exato."""
+        """Captura todas as páginas geradas e aplica fallback caso o caminho exato varie."""
         if not caminho_base:
             return []
 
@@ -278,7 +280,7 @@ class AppVisualizador:
                     if sem_ext == nome_limpo or sem_ext.startswith(nome_limpo + "_"):
                         arquivos_encontrados.append(caminho_completo)
 
-            # FALLBACK: Se não achar pelo nome do parâmetro, pega os JPGs recentes da pasta
+            # FALLBACK: Se não encontrou pelo nome direto do parâmetro, busca imagens na pasta
             if not arquivos_encontrados:
                 for f in os.listdir(pasta):
                     if f.lower().endswith(('.jpg', '.jpeg')):
@@ -314,7 +316,6 @@ class AppVisualizador:
         """Redesenha a tela conforme a página selecionada"""
         self.canvas.delete("all")
 
-        # Desenha o fundo degradê
         w_canv = self.canvas.winfo_width()
         h_canv = self.canvas.winfo_height()
         
@@ -436,16 +437,17 @@ class AppVisualizador:
             os.system(f'explorer "{os.path.abspath(os.path.dirname(caminho_target))}"')
 
 if __name__ == "__main__":
-    param1 = sys.argv[1] if len(sys.argv) > 1 else ""
-    param2 = sys.argv[2] if len(sys.argv) > 1 and sys.argv[2] != "" else ""
-
-    if param1 and param2:
-        pasta_param = param1
-        arquivo_jpg = param2
-    elif param1:
+    # TRATAMENTO SEGURO DOS ARGUMENTOS DE LINHA DE COMANDO
+    args = sys.argv[1:]
+    
+    if len(args) >= 2:
+        pasta_param = args[0]
+        arquivo_jpg = args[1]
+    elif len(args) == 1:
+        param1 = args[0]
         if param1.lower().endswith(('.jpg', '.jpeg')):
             arquivo_jpg = param1
-            pasta_param = os.path.dirname(param1)
+            pasta_param = os.path.dirname(param1) or os.getcwd()
         else:
             pasta_param = param1
             arquivo_jpg = os.path.join(pasta_param, "CATALOGO_OESTE_PHARMA.JPG")
