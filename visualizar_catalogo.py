@@ -3,6 +3,7 @@ import os
 import io
 import csv
 import re
+import subprocess
 import webbrowser
 import urllib.parse
 import tkinter as tk
@@ -17,13 +18,16 @@ except ImportError:
     WIN32_DISPONIVEL = False
 
 def copiar_imagem_para_clipboard(caminho_img):
-    """Copia o arquivo JPG diretamente para a memória do Windows (CTRL+V)"""
+    """Copia a imagem para o Clipboard do Windows (Compatível com RDP e WhatsApp)."""
     if not os.path.exists(caminho_img):
         return False
 
+    abs_path = os.path.abspath(caminho_img)
+
+    # Tenta copiar como Bitmap nativo
     if WIN32_DISPONIVEL:
         try:
-            image = Image.open(caminho_img)
+            image = Image.open(abs_path)
             output = io.BytesIO()
             image.convert("RGB").save(output, "BMP")
             data = output.getvalue()[14:]
@@ -35,11 +39,20 @@ def copiar_imagem_para_clipboard(caminho_img):
             win32clipboard.CloseClipboard()
             return True
         except Exception:
-            return False
-    else:
+            pass
+
+    # Fallback confiável via PowerShell (copia como arquivo/imagem pronta para CTRL+V)
+    try:
+        ps_script = f"Set-Clipboard -Path '{abs_path}'"
+        subprocess.run(["powershell", "-command", ps_script], capture_output=True, check=True)
+        return True
+    except Exception:
         try:
-            cmd = f'powershell -command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Clipboard]::SetImage([System.Drawing.Image]::FromFile(\'{caminho_img}\'))"'
-            os.system(cmd)
+            ps_script = (
+                f"Add-Type -AssemblyName System.Windows.Forms; "
+                f"[System.Windows.Forms.Clipboard]::SetImage([System.Drawing.Image]::FromFile('{abs_path}'))"
+            )
+            subprocess.run(["powershell", "-command", ps_script], capture_output=True, check=True)
             return True
         except Exception:
             return False
@@ -55,22 +68,30 @@ def ler_metadados_csv(csv_path):
             try:
                 with open(csv_path, mode='r', encoding=enc) as f:
                     reader = csv.DictReader(f, delimiter=';')
-                    if not reader.fieldnames:
+                    if not reader.fieldnames or len(reader.fieldnames) <= 1:
+                        f.seek(0)
                         reader = csv.DictReader(f, delimiter=',')
                     
                     if reader.fieldnames:
                         field_map = {col.strip().lower().replace('\ufeff', ''): col for col in reader.fieldnames}
                         
                         first_row = next(reader, None)
-                        if first_row and 'contato_whatsapp' in field_map:
-                            raw_whatsapp = first_row.get(field_map['contato_whatsapp'], '').strip()
+                        if first_row:
+                            # Busca por qualquer coluna que represente WhatsApp/Contato
+                            col_whats = None
+                            for key in field_map:
+                                if 'whatsapp' in key or 'contato' in key or 'fone' in key or 'celular' in key:
+                                    col_whats = field_map[key]
+                                    break
                             
-                            if ' - ' in raw_whatsapp:
-                                partes = raw_whatsapp.split(' - ', 1)
-                                meta['nome_contato'] = partes[0].strip()
-                                meta['fone'] = partes[1].strip()
-                            else:
-                                meta['fone'] = raw_whatsapp
+                            if col_whats:
+                                raw_whatsapp = first_row.get(col_whats, '').strip()
+                                if ' - ' in raw_whatsapp:
+                                    partes = raw_whatsapp.split(' - ', 1)
+                                    meta['nome_contato'] = partes[0].strip()
+                                    meta['fone'] = partes[1].strip()
+                                else:
+                                    meta['fone'] = raw_whatsapp
                             break
             except Exception:
                 continue
@@ -107,7 +128,7 @@ class AppVisualizador:
 
         self.root.title("Zé do Encarte - Visualizador e Gerador de Ofertas")
         
-        # SUBIR TELA: Define estado maximizado de fábrica
+        # Define estado maximizado
         try:
             self.root.state('zoomed')
         except Exception:
@@ -125,11 +146,10 @@ class AppVisualizador:
         self.root.bind("<Right>", lambda event: self.proxima_pagina())
         self.root.bind("<F5>", lambda event: self.atualizar_paginas())
 
-        # PAINEL SUPERIOR (TEMA ROXO/PINK ZÉ DO ENCARTE)
+        # PAINEL SUPERIOR
         self.frame_topo = tk.Frame(self.root, bg="#120024")
         self.frame_topo.pack(fill="x", side="top", ipady=6)
 
-        # Título da Marca em Pink Neon
         lbl_marca = tk.Label(
             self.frame_topo, text="Zé do Encarte", font=("Segoe UI", 16, "bold"), 
             fg="#FF007F", bg="#120024"
@@ -226,7 +246,7 @@ class AppVisualizador:
         )
         self.lbl_paginacao.pack(side="left", expand=True)
 
-        # BOTÕES DE CONTROLO DE ZOOM
+        # BOTÕES DE ZOOM
         frame_zoom = tk.Frame(frame_nav, bg="#1D0036")
         frame_zoom.pack(side="right", padx=15)
 
@@ -263,7 +283,7 @@ class AppVisualizador:
         )
         self.btn_prox.pack(side="right", padx=5)
 
-        # PAINEL CENTRAL COM SCROLLBARS (PERMITE ROLAR A PÁGINA)
+        # PAINEL CENTRAL COM SCROLLBARS
         self.container_canvas = tk.Frame(self.root, bg="#120024")
         self.container_canvas.pack(fill="both", expand=True)
 
@@ -288,12 +308,10 @@ class AppVisualizador:
         # Eventos do Scroll do Rato
         self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
 
-        # Carregamento imediato ao abrir
         self.root.after(100, self.atualizar_paginas)
 
     def _on_mousewheel(self, event):
-        """Suporte para rolar a página com a roda do rato (Mouse Wheel)"""
-        if event.state & 0x0004:  # Se CTRL estiver pressionado, altera o Zoom
+        if event.state & 0x0004:
             if event.delta > 0:
                 self.aumentar_zoom()
             else:
@@ -319,7 +337,6 @@ class AppVisualizador:
         self.atualizar_visualizacao()
 
     def localizar_paginas_geradas(self, caminho_base):
-        """Captura todas as páginas geradas e aplica fallback caso o caminho exato varie."""
         if not caminho_base:
             return []
 
@@ -359,7 +376,6 @@ class AppVisualizador:
         return resultado_final
 
     def atualizar_paginas(self):
-        """Recarrega a lista de imagens da pasta e atualiza a exibição"""
         novas_paginas = self.localizar_paginas_geradas(self.jpg_path)
         self.lista_paginas = novas_paginas
         
@@ -369,7 +385,6 @@ class AppVisualizador:
         self.atualizar_visualizacao()
 
     def atualizar_visualizacao(self):
-        """Redesenha a tela conforme a página selecionada, aplicando Zoom e Scroll"""
         self.canvas.delete("all")
 
         w_canv = self.canvas.winfo_width()
@@ -399,26 +414,21 @@ class AppVisualizador:
             self.pil_img = Image.open(caminho_atual)
             img_w, img_h = self.pil_img.size
             
-            # Ajuste base de tamanho à janela + multiplicador de zoom
             max_w = max(300, w_canv - 60) if w_canv > 60 else 1050
             max_h = max(300, h_canv - 40) if h_canv > 40 else 650
             
             base_ratio = min(max_w / img_w, max_h / img_h)
             
-            # Aplica o fator de zoom selecionado pelo utilizador
             final_w = int(img_w * base_ratio * self.zoom_fator)
             final_h = int(img_h * base_ratio * self.zoom_fator)
 
             img_resized = self.pil_img.resize((final_w, final_h), Image.Resampling.LANCZOS)
             self.tk_img = ImageTk.PhotoImage(img_resized)
 
-            # Centralização ou alinhamento com área rolável
             pos_x = max(w_canv // 2, final_w // 2 + 10)
             pos_y = max(h_canv // 2, final_h // 2 + 10)
 
             self.canvas.create_image(pos_x, pos_y, image=self.tk_img, anchor="center")
-            
-            # Atualiza os limites de rolagem (ScrollRegion)
             self.canvas.config(scrollregion=(0, 0, max(w_canv, final_w + 40), max(h_canv, final_h + 40)))
 
         except Exception as e:
@@ -450,8 +460,10 @@ class AppVisualizador:
             messagebox.showinfo(
                 "Imagem Copiada!", 
                 f"A Página {self.indice_atual + 1} foi copiada!\n\n"
-                "Pressione CTRL + V em qualquer conversa para colar."
+                "Pressione CTRL + V no WhatsApp ou conversa para colar."
             )
+        else:
+            messagebox.showerror("Erro ao Copiar", "Não foi possível copiar a imagem para a área de transferência.")
 
     def abrir_whatsapp(self):
         if not self.lista_paginas:
@@ -460,37 +472,28 @@ class AppVisualizador:
         caminho_atual = self.lista_paginas[self.indice_atual]
         copiou = copiar_imagem_para_clipboard(caminho_atual)
 
-        if self.indice_atual == 0:
-            total_paginas = len(self.lista_paginas)
-            msg_extra = ""
-            if total_paginas > 1:
-                msg_extra = f"\n\n💡 O encarte possui {total_paginas} páginas. Navegue no programa e copie as demais!"
+        # Atualiza metadados antes de abrir o link
+        self.meta = ler_metadados_csv(self.csv_path)
+        self.num_whats = limpar_numero_whatsapp(self.meta.get('fone', ''))
 
-            if copiou:
-                messagebox.showinfo(
-                    "Página 1 Copiada!", 
-                    "A Página 1 foi copiada para a memória!\n\n"
-                    "O WhatsApp será aberto. Pressione CTRL + V para colar a imagem."
-                    f"{msg_extra}"
-                )
+        nome_contato = self.meta.get('nome_contato', '')
+        saudacao = f"Olá {nome_contato}!" if nome_contato else "Olá!"
+        mensagem = f"{saudacao} Segue nosso {self.meta.get('titulo', 'Encarte de Ofertas')}."
+        msg_encoded = urllib.parse.quote(mensagem)
 
-            nome_contato = self.meta.get('nome_contato', '')
-            saudacao = f"Olá {nome_contato}!" if nome_contato else "Olá!"
-            mensagem = f"{saudacao} Segue nosso {self.meta.get('titulo', 'Encarte de Ofertas')}."
-            msg_encoded = urllib.parse.quote(mensagem)
-
-            if self.num_whats:
-                url = f"https://api.whatsapp.com/send?phone={self.num_whats}&text={msg_encoded}"
-                webbrowser.open(url)
-            else:
-                webbrowser.open("https://web.whatsapp.com")
+        if self.num_whats:
+            url = f"https://api.whatsapp.com/send?phone={self.num_whats}&text={msg_encoded}"
         else:
-            if copiou:
-                messagebox.showinfo(
-                    "Página Copiada!", 
-                    f"A Página {self.indice_atual + 1} foi copiada!\n\n"
-                    "Cole (CTRL+V) diretamente na conversa do WhatsApp."
-                )
+            url = f"https://web.whatsapp.com/send?text={msg_encoded}"
+
+        webbrowser.open(url)
+
+        if copiou:
+            messagebox.showinfo(
+                "Página Copiada!", 
+                f"A Página {self.indice_atual + 1} foi copiada!\n\n"
+                "O WhatsApp foi aberto na tela. Basta pressionar CTRL + V na conversa para colar a imagem!"
+            )
 
     def abrir_pasta(self):
         caminho_target = self.lista_paginas[self.indice_atual] if self.lista_paginas else self.jpg_path
@@ -500,7 +503,6 @@ class AppVisualizador:
             os.system(f'explorer "{os.path.abspath(os.path.dirname(caminho_target))}"')
 
 if __name__ == "__main__":
-    # TRATAMENTO SEGURO DOS ARGUMENTOS DE LINHA DE COMANDO
     args = sys.argv[1:]
     
     if len(args) >= 2:
