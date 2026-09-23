@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import sys
 import os
 import io
@@ -150,10 +151,11 @@ class AppVisualizador:
         self.jpg_path = jpg_path
         self.lista_paginas = []
         self.indice_atual = 0
-        self.zoom_fator = 1.0
-        self.tema_atual = "claro"
+        self.zoom_fator = 2.0
+        self.tema_atual = "escuro"
         self.widgets_tema = []
         self.logo_tk = None
+        self.icones_tk = {}
 
         base_path = os.path.splitext(self.jpg_path)[0] if self.jpg_path else ""
         self.csv_path = f"{base_path}.csv" if base_path else ""
@@ -214,14 +216,68 @@ class AppVisualizador:
             return None
         try:
             logo = Image.open(caminho_logo).convert("RGB")
-            logo.thumbnail((176, 58), Image.Resampling.LANCZOS)
+            logo.thumbnail((280, 78), Image.Resampling.LANCZOS)
             self.logo_tk = ImageTk.PhotoImage(logo)
             return self.logo_tk
         except Exception:
             return None
 
+    def _criar_icone(self, nome, cor="#FFFFFF", tamanho=18):
+        """Cria Ã­cones simples sem depender de caracteres especiais da fonte."""
+        chave = (nome, cor, tamanho)
+        if chave in self.icones_tk:
+            return self.icones_tk[chave]
+
+        img = Image.new("RGBA", (tamanho, tamanho), (0, 0, 0, 0))
+        d = ImageDraw.Draw(img)
+        w = max(1, tamanho // 10)
+        c = cor
+
+        if nome == "pasta":
+            d.rounded_rectangle((1, 5, tamanho - 1, tamanho - 2), radius=2, outline=c, width=w)
+            d.line((3, 5, 3, 3, tamanho // 2, 3, tamanho // 2 + 2, 5), fill=c, width=w)
+        elif nome == "atualizar":
+            d.arc((2, 2, tamanho - 2, tamanho - 2), 35, 310, fill=c, width=w)
+            d.polygon([(tamanho - 2, 3), (tamanho - 2, tamanho // 2), (tamanho // 2 + 2, 5)], fill=c)
+        elif nome == "copiar":
+            d.rounded_rectangle((5, 2, tamanho - 2, tamanho - 5), radius=2, outline=c, width=w)
+            d.rounded_rectangle((2, 5, tamanho - 5, tamanho - 2), radius=2, outline=c, width=w)
+        elif nome == "tema":
+            d.ellipse((2, 2, tamanho - 2, tamanho - 2), outline=c, width=w)
+            d.pieslice((2, 2, tamanho - 2, tamanho - 2), 90, 270, fill=c)
+        elif nome == "anterior":
+            d.line((tamanho - 5, 3, 5, tamanho // 2, tamanho - 5, tamanho - 3), fill=c, width=max(2, w))
+        elif nome == "proximo":
+            d.line((5, 3, tamanho - 5, tamanho // 2, 5, tamanho - 3), fill=c, width=max(2, w))
+
+        foto = ImageTk.PhotoImage(img)
+        self.icones_tk[chave] = foto
+        return foto
+
+    def _carregar_icone_whatsapp(self):
+        """Procura ico-whats ao lado do executÃ¡vel e aceita formatos comuns."""
+        pasta = self._diretorio_executavel()
+        candidatos = ["ico-whats.png", "ico-whats.ico", "ico-whats.jpg", "ico-whats.jpeg"]
+        for nome in candidatos:
+            caminho = os.path.join(pasta, nome)
+            if not os.path.isfile(caminho):
+                continue
+            try:
+                imagem = Image.open(caminho).convert("RGBA")
+                imagem.thumbnail((34, 34), Image.Resampling.LANCZOS)
+                foto = ImageTk.PhotoImage(imagem)
+                self.icones_tk["whatsapp"] = foto
+                return foto
+            except Exception:
+                continue
+        return None
+
+    def _definir_icone_botao(self, botao, nome, cor="#FFFFFF", composto=True):
+        icone = self._criar_icone(nome, cor)
+        botao.config(image=icone, compound="left" if composto else "center")
+
     def _montar_interface(self):
-        self.frame_topo = tk.Frame(self.root, bd=0, height=78)
+        self.frame_topo = tk.Frame(self.root, bd=0, height=98)
         self.frame_topo.pack(fill="x", side="top")
         self.frame_topo.pack_propagate(False)
         self._registrar_tema(self.frame_topo, "superficie")
@@ -233,88 +289,79 @@ class AppVisualizador:
         logo = self._carregar_logo()
         if logo:
             self.lbl_logo = tk.Label(frame_marca, image=logo, bd=0)
-            self.lbl_logo.pack(side="left", padx=(0, 12), pady=9)
+            self.lbl_logo.pack(side="left", pady=8)
             self._registrar_tema(self.lbl_logo, "superficie")
-
-        frame_titulos = tk.Frame(frame_marca, bd=0)
-        frame_titulos.pack(side="left", pady=12)
-        self._registrar_tema(frame_titulos, "superficie")
-
-        self.lbl_marca = tk.Label(
-            frame_titulos, text="ZÃ© do Encarte", font=("Segoe UI", 17, "bold"), anchor="w"
-        )
-        self.lbl_marca.pack(anchor="w")
-        self._registrar_tema(self.lbl_marca, "titulo")
-
-        self.lbl_status = tk.Label(
-            frame_titulos, text="â—  Encarte pronto para visualizar", font=("Segoe UI", 9), anchor="w"
-        )
-        self.lbl_status.pack(anchor="w", pady=(2, 0))
-        self._registrar_tema(self.lbl_status, "status")
+        else:
+            self.lbl_logo = tk.Label(
+                frame_marca, text="ZÃ© do Encarte", font=("Segoe UI", 20, "bold"), anchor="w"
+            )
+            self.lbl_logo.pack(side="left", pady=18)
+            self._registrar_tema(self.lbl_logo, "titulo")
 
         frame_acoes = tk.Frame(self.frame_topo, bd=0)
         frame_acoes.pack(side="right", fill="y", padx=(8, 20))
         self._registrar_tema(frame_acoes, "superficie")
 
-        self.btn_tema = self._criar_botao(frame_acoes, "ðŸŒ™  Tema escuro", self.alternar_tema)
-        self.btn_tema.pack(side="right", padx=(7, 0), pady=18)
+        self.btn_tema = self._criar_botao(frame_acoes, "Tema claro", self.alternar_tema)
+        self._definir_icone_botao(self.btn_tema, "tema", "#0EA5E9")
+        self.btn_tema.pack(side="right", padx=(7, 0), pady=27)
 
-        self.btn_whats = self._criar_botao(
-            frame_acoes, "Copiar e abrir WhatsApp", self.abrir_whatsapp, "primario"
-        )
-        self.btn_whats.pack(side="right", padx=7, pady=18)
+        self.btn_whats = self._criar_botao(frame_acoes, "", self.abrir_whatsapp, "whatsapp", largura=4)
+        icone_whats = self._carregar_icone_whatsapp()
+        if icone_whats:
+            self.btn_whats.config(image=icone_whats, compound="center", padx=10, pady=4)
+        else:
+            self.btn_whats.config(text="WhatsApp", width=10)
+        self.btn_whats.pack(side="right", padx=7, pady=27)
 
-        self.btn_copiar = self._criar_botao(frame_acoes, "Copiar imagem", self.apenas_copiar_imagem)
-        self.btn_copiar.pack(side="right", padx=4, pady=18)
+        self.btn_copiar = self._criar_botao(frame_acoes, "Copiar imagem", self.apenas_copiar_imagem, "azul")
+        self._definir_icone_botao(self.btn_copiar, "copiar")
+        self.btn_copiar.pack(side="right", padx=4, pady=27)
 
         self.btn_atualizar = self._criar_botao(frame_acoes, "Atualizar  F5", self.atualizar_paginas)
-        self.btn_atualizar.pack(side="right", padx=4, pady=18)
+        self._definir_icone_botao(self.btn_atualizar, "atualizar", "#0EA5E9")
+        self.btn_atualizar.pack(side="right", padx=4, pady=27)
 
         self.btn_pasta = self._criar_botao(frame_acoes, "Abrir pasta", self.abrir_pasta)
-        self.btn_pasta.pack(side="right", padx=4, pady=18)
+        self._definir_icone_botao(self.btn_pasta, "pasta", "#0EA5E9")
+        self.btn_pasta.pack(side="right", padx=4, pady=27)
 
-        self.frame_nav = tk.Frame(self.root, bd=0, height=52)
+        self.frame_nav = tk.Frame(self.root, bd=0, height=54)
         self.frame_nav.pack(fill="x", side="top")
         self.frame_nav.pack_propagate(False)
         self._registrar_tema(self.frame_nav, "superficie_alt")
 
-        self.btn_ant = self._criar_botao(
-            self.frame_nav, "â€¹  Anterior", self.pagina_anterior, largura=11
-        )
-        self.btn_ant.pack(side="left", padx=(20, 6), pady=9)
-        self.btn_ant.config(state="disabled")
-
-        self.btn_prox = self._criar_botao(
-            self.frame_nav, "PrÃ³xima  â€º", self.proxima_pagina, largura=11
-        )
-        self.btn_prox.pack(side="left", padx=6, pady=9)
-        self.btn_prox.config(state="disabled")
-
         self.lbl_paginacao = tk.Label(
             self.frame_nav, text="Carregando...", font=("Segoe UI", 10, "bold")
         )
-        self.lbl_paginacao.pack(side="left", padx=18)
+        self.lbl_paginacao.pack(side="left", padx=20)
         self._registrar_tema(self.lbl_paginacao, "texto")
 
-        frame_zoom = tk.Frame(self.frame_nav, bd=0)
-        frame_zoom.pack(side="right", padx=20, pady=8)
-        self._registrar_tema(frame_zoom, "superficie_alt")
+        frame_controles = tk.Frame(self.frame_nav, bd=0)
+        frame_controles.pack(side="right", padx=20, pady=8)
+        self._registrar_tema(frame_controles, "superficie_alt")
 
-        self.btn_zoom_out = self._criar_botao(frame_zoom, "âˆ’", self.diminuir_zoom, largura=3)
+        self.btn_ant = self._criar_botao(frame_controles, "Anterior", self.pagina_anterior, largura=10)
+        self._definir_icone_botao(self.btn_ant, "anterior")
+        self.btn_ant.pack(side="left", padx=(0, 4))
+        self.btn_ant.config(state="disabled")
+
+        self.btn_prox = self._criar_botao(frame_controles, "PrÃ³xima", self.proxima_pagina, largura=10)
+        self._definir_icone_botao(self.btn_prox, "proximo")
+        self.btn_prox.pack(side="left", padx=(4, 14))
+        self.btn_prox.config(state="disabled")
+
+        self.btn_zoom_out = self._criar_botao(frame_controles, "âˆ’", self.diminuir_zoom, largura=3)
         self.btn_zoom_out.config(font=("Segoe UI", 13, "bold"), padx=4, pady=3)
         self.btn_zoom_out.pack(side="left", padx=2)
 
-        self.lbl_zoom = tk.Label(frame_zoom, text="100%", font=("Segoe UI", 9, "bold"), width=6)
+        self.lbl_zoom = tk.Label(frame_controles, text="200%", font=("Segoe UI", 10, "bold"), width=7)
         self.lbl_zoom.pack(side="left", padx=3)
         self._registrar_tema(self.lbl_zoom, "texto")
 
-        self.btn_zoom_in = self._criar_botao(frame_zoom, "+", self.aumentar_zoom, largura=3)
+        self.btn_zoom_in = self._criar_botao(frame_controles, "+", self.aumentar_zoom, largura=3)
         self.btn_zoom_in.config(font=("Segoe UI", 13, "bold"), padx=4, pady=3)
         self.btn_zoom_in.pack(side="left", padx=2)
-
-        self.btn_zoom_reset = self._criar_botao(frame_zoom, "1:1", self.resetar_zoom, largura=4)
-        self.btn_zoom_reset.config(padx=4, pady=5)
-        self.btn_zoom_reset.pack(side="left", padx=(5, 0))
 
         self.container_canvas = tk.Frame(self.root, bd=0)
         self.container_canvas.pack(fill="both", expand=True, padx=18, pady=(14, 18))
@@ -356,6 +403,19 @@ class AppVisualizador:
                     widget.config(bg=t["superficie_alt"], fg=t["texto"])
                 elif papel == "canvas":
                     widget.config(bg=t["canvas"], highlightbackground=t["borda"])
+                elif papel == "azul":
+                    widget.config(
+                        bg="#38BDF8" if self.tema_atual == "escuro" else "#0EA5E9",
+                        fg="#07111F" if self.tema_atual == "escuro" else "#FFFFFF",
+                        activebackground="#7DD3FC", activeforeground="#07111F",
+                        disabledforeground=t["texto_suave"],
+                    )
+                elif papel == "whatsapp":
+                    widget.config(
+                        bg="#25D366", fg="#FFFFFF",
+                        activebackground="#1FB457", activeforeground="#FFFFFF",
+                        disabledforeground=t["texto_suave"],
+                    )
                 elif papel == "primario":
                     widget.config(
                         bg=t["primaria"], fg=t["primaria_texto"],
@@ -373,7 +433,7 @@ class AppVisualizador:
             except tk.TclError:
                 pass
 
-        self.btn_tema.config(text="ðŸŒ™  Tema escuro" if self.tema_atual == "claro" else "â˜€  Tema claro")
+        self.btn_tema.config(text="Tema escuro" if self.tema_atual == "claro" else "Tema claro")
         self.atualizar_visualizacao()
 
     def alternar_tema(self):
@@ -402,8 +462,8 @@ class AppVisualizador:
             self.atualizar_visualizacao()
 
     def resetar_zoom(self):
-        self.zoom_fator = 1.0
-        self.lbl_zoom.config(text="100%")
+        self.zoom_fator = 2.0
+        self.lbl_zoom.config(text="200%")
         self.atualizar_visualizacao()
 
     def localizar_paginas_geradas(self, caminho_base):
