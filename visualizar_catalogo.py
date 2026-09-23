@@ -211,7 +211,8 @@ class AppVisualizador:
         return os.path.dirname(os.path.abspath(__file__))
 
     def _carregar_logo(self):
-        caminho_logo = os.path.join(self._diretorio_executavel(), "logo-ze.jpg")
+        nome_logo = "logo-ze2.jpg" if self.tema_atual == "escuro" else "logo-ze.jpg"
+        caminho_logo = os.path.join(self._diretorio_executavel(), nome_logo)
         if not os.path.isfile(caminho_logo):
             return None
         try:
@@ -221,6 +222,13 @@ class AppVisualizador:
             return self.logo_tk
         except Exception:
             return None
+
+    def _atualizar_logo_tema(self):
+        logo = self._carregar_logo()
+        if logo:
+            self.lbl_logo.config(image=logo, text="")
+        else:
+            self.lbl_logo.config(image="", text="ZÃ© do Encarte")
 
     def _criar_icone(self, nome, cor="#FFFFFF", tamanho=18):
         """Cria Ã­cones simples sem depender de caracteres especiais da fonte."""
@@ -331,27 +339,29 @@ class AppVisualizador:
         self.frame_nav.pack_propagate(False)
         self._registrar_tema(self.frame_nav, "superficie_alt")
 
+        frame_paginacao = tk.Frame(self.frame_nav, bd=0)
+        frame_paginacao.pack(side="left", padx=20, pady=8)
+        self._registrar_tema(frame_paginacao, "superficie_alt")
+
+        self.btn_ant = self._criar_botao(frame_paginacao, "<", self.pagina_anterior, largura=3)
+        self.btn_ant.config(font=("Segoe UI", 13, "bold"), padx=4, pady=3, state="disabled")
+        self.btn_ant.pack(side="left", padx=(0, 5))
+
         self.lbl_paginacao = tk.Label(
-            self.frame_nav, text="Carregando...", font=("Segoe UI", 10, "bold")
+            frame_paginacao, text="PÃ¡gina 0 a 0", font=("Segoe UI", 10, "bold"), width=14
         )
-        self.lbl_paginacao.pack(side="left", padx=20)
+        self.lbl_paginacao.pack(side="left", padx=3)
         self._registrar_tema(self.lbl_paginacao, "texto")
+
+        self.btn_prox = self._criar_botao(frame_paginacao, ">", self.proxima_pagina, largura=3)
+        self.btn_prox.config(font=("Segoe UI", 13, "bold"), padx=4, pady=3, state="disabled")
+        self.btn_prox.pack(side="left", padx=(5, 0))
 
         frame_controles = tk.Frame(self.frame_nav, bd=0)
         frame_controles.pack(side="right", padx=20, pady=8)
         self._registrar_tema(frame_controles, "superficie_alt")
 
-        self.btn_ant = self._criar_botao(frame_controles, "Anterior", self.pagina_anterior, largura=10)
-        self._definir_icone_botao(self.btn_ant, "anterior")
-        self.btn_ant.pack(side="left", padx=(0, 4))
-        self.btn_ant.config(state="disabled")
-
-        self.btn_prox = self._criar_botao(frame_controles, "PrÃ³xima", self.proxima_pagina, largura=10)
-        self._definir_icone_botao(self.btn_prox, "proximo")
-        self.btn_prox.pack(side="left", padx=(4, 14))
-        self.btn_prox.config(state="disabled")
-
-        self.btn_zoom_out = self._criar_botao(frame_controles, "âˆ’", self.diminuir_zoom, largura=3)
+        self.btn_zoom_out = self._criar_botao(frame_controles, "-", self.diminuir_zoom, largura=3)
         self.btn_zoom_out.config(font=("Segoe UI", 13, "bold"), padx=4, pady=3)
         self.btn_zoom_out.pack(side="left", padx=2)
 
@@ -434,6 +444,7 @@ class AppVisualizador:
                 pass
 
         self.btn_tema.config(text="Tema escuro" if self.tema_atual == "claro" else "Tema claro")
+        self._atualizar_logo_tema()
         self.atualizar_visualizacao()
 
     def alternar_tema(self):
@@ -515,13 +526,13 @@ class AppVisualizador:
                 text=f"Aguardando o encarte informado\n{self.jpg_path}\n\nPressione F5 para atualizar.",
                 fill=t["texto_suave"], font=("Segoe UI", 12), justify="center"
             )
-            self.lbl_paginacao.config(text="PÃ¡gina 0 de 0")
+            self.lbl_paginacao.config(text="PÃ¡gina 0 a 0")
             self.btn_ant.config(state="disabled")
             self.btn_prox.config(state="disabled")
             return
 
         total = len(self.lista_paginas)
-        self.lbl_paginacao.config(text=f"PÃ¡gina {self.indice_atual + 1} de {total}")
+        self.lbl_paginacao.config(text=f"PÃ¡gina {self.indice_atual + 1} a {total}")
         self.btn_ant.config(state="normal" if self.indice_atual > 0 else "disabled")
         self.btn_prox.config(state="normal" if self.indice_atual < total - 1 else "disabled")
 
