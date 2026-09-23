@@ -10,7 +10,7 @@ import tkinter as tk
 from tkinter import messagebox
 from PIL import Image, ImageTk, ImageDraw
 
-# Biblioteca do Windows para manipular área de transferência
+# Biblioteca do Windows para manipular Ã¡rea de transferÃªncia
 try:
     import win32clipboard
     WIN32_DISPONIVEL = True
@@ -18,7 +18,7 @@ except ImportError:
     WIN32_DISPONIVEL = False
 
 def copiar_imagem_para_clipboard(caminho_img):
-    """Copia a imagem para o Clipboard do Windows (Compatível com RDP e WhatsApp)."""
+    """Copia a imagem para o Clipboard do Windows (CompatÃ­vel com RDP e WhatsApp)."""
     if not os.path.exists(caminho_img):
         return False
 
@@ -41,7 +41,7 @@ def copiar_imagem_para_clipboard(caminho_img):
         except Exception:
             pass
 
-    # Fallback confiável via PowerShell (copia como arquivo/imagem pronta para CTRL+V)
+    # Fallback confiÃ¡vel via PowerShell (copia como arquivo/imagem pronta para CTRL+V)
     try:
         ps_script = f"Set-Clipboard -Path '{abs_path}'"
         subprocess.run(["powershell", "-command", ps_script], capture_output=True, check=True)
@@ -58,7 +58,7 @@ def copiar_imagem_para_clipboard(caminho_img):
             return False
 
 def ler_metadados_csv(csv_path):
-    """Lê o cabeçalho/metadados do CSV gerado."""
+    """LÃª o cabeÃ§alho/metadados do CSV gerado."""
     meta = {'fone': '', 'nome_contato': '', 'titulo': 'Encarte de Ofertas', 'saida_jpg': ''}
     if not os.path.exists(csv_path):
         return meta
@@ -110,205 +110,275 @@ def limpar_numero_whatsapp(fone_raw):
     return apenas_numeros
 
 class AppVisualizador:
+    TEMAS = {
+        "claro": {
+            "fundo": "#F4F6F8",
+            "superficie": "#FFFFFF",
+            "superficie_alt": "#F8FAFC",
+            "texto": "#172033",
+            "texto_suave": "#667085",
+            "borda": "#DDE3EA",
+            "primaria": "#D91675",
+            "primaria_ativa": "#B90F61",
+            "primaria_texto": "#FFFFFF",
+            "secundaria": "#EEF2F6",
+            "secundaria_ativa": "#E2E8F0",
+            "verde": "#1F9D68",
+            "canvas": "#E9EDF2",
+            "erro": "#C72C41",
+        },
+        "escuro": {
+            "fundo": "#11151C",
+            "superficie": "#191F29",
+            "superficie_alt": "#202733",
+            "texto": "#F4F7FB",
+            "texto_suave": "#A8B2C1",
+            "borda": "#303A49",
+            "primaria": "#F02B8C",
+            "primaria_ativa": "#C91D72",
+            "primaria_texto": "#FFFFFF",
+            "secundaria": "#293240",
+            "secundaria_ativa": "#364254",
+            "verde": "#35C98B",
+            "canvas": "#0C1016",
+            "erro": "#FF6678",
+        },
+    }
+
     def __init__(self, root, pasta_parametros="", jpg_path=""):
         self.root = root
         self.jpg_path = jpg_path
-        
-        # Mapeamento de páginas geradas
         self.lista_paginas = []
         self.indice_atual = 0
-        self.zoom_fator = 1.0  # Fator de escala do Zoom
+        self.zoom_fator = 1.0
+        self.tema_atual = "claro"
+        self.widgets_tema = []
+        self.logo_tk = None
 
-        # Define caminho do CSV associado para ler os metadados
         base_path = os.path.splitext(self.jpg_path)[0] if self.jpg_path else ""
         self.csv_path = f"{base_path}.csv" if base_path else ""
-
         self.meta = ler_metadados_csv(self.csv_path)
         self.num_whats = limpar_numero_whatsapp(self.meta.get('fone', ''))
 
-        self.root.title("Zé do Encarte - Visualizador e Gerador de Ofertas")
-        
-        # Define estado maximizado
+        self.root.title("ZÃ© do Encarte - Visualizador de Ofertas")
         try:
             self.root.state('zoomed')
         except Exception:
             self.root.geometry("1280x850")
-            
-        self.root.configure(bg="#120024")
-        
-        # Traz a janela para a frente
+        self.root.minsize(960, 620)
+
         self.root.lift()
         self.root.attributes('-topmost', True)
         self.root.after_idle(self.root.attributes, '-topmost', False)
 
-        # Atalhos do teclado
         self.root.bind("<Left>", lambda event: self.pagina_anterior())
         self.root.bind("<Right>", lambda event: self.proxima_pagina())
         self.root.bind("<F5>", lambda event: self.atualizar_paginas())
+        self.root.bind("<Control-plus>", lambda event: self.aumentar_zoom())
+        self.root.bind("<Control-minus>", lambda event: self.diminuir_zoom())
 
-        # PAINEL SUPERIOR
-        self.frame_topo = tk.Frame(self.root, bg="#120024")
-        self.frame_topo.pack(fill="x", side="top", ipady=6)
+        self._montar_interface()
+        self.aplicar_tema()
+        self.root.after(100, self.atualizar_paginas)
 
-        lbl_marca = tk.Label(
-            self.frame_topo, text="Zé do Encarte", font=("Segoe UI", 16, "bold"), 
-            fg="#FF007F", bg="#120024"
-        )
-        lbl_marca.pack(side="left", padx=(15, 5))
+    def _registrar_tema(self, widget, papel, **opcoes):
+        self.widgets_tema.append((widget, papel, opcoes))
+        return widget
 
-        lbl_status = tk.Label(
-            self.frame_topo, text="• Encarte Gerado!", font=("Segoe UI", 10, "bold"), 
-            fg="#00FF88", bg="#120024"
-        )
-        lbl_status.pack(side="left", padx=5)
-
-        # BOTÕES SUPERIORES
-        btn_whats = tk.Button(
-            self.frame_topo, 
-            text="💬 Copiar e Abrir Whats", 
-            font=("Segoe UI", 9, "bold"), 
-            bg="#FF007F", 
-            fg="white", 
-            activebackground="#E0006F",
-            activeforeground="white",
+    def _criar_botao(self, pai, texto, comando, papel="secundario", largura=None):
+        btn = tk.Button(
+            pai,
+            text=texto,
+            command=comando,
+            font=("Segoe UI", 9, "bold"),
             bd=0,
-            padx=10,
-            pady=4,
+            relief="flat",
+            padx=13,
+            pady=8,
             cursor="hand2",
-            command=self.abrir_whatsapp
+            takefocus=True,
         )
-        btn_whats.pack(side="right", padx=8)
+        if largura:
+            btn.config(width=largura)
+        self._registrar_tema(btn, papel)
+        return btn
 
-        btn_copiar = tk.Button(
-            self.frame_topo, 
-            text="📋 Apenas Copiar", 
-            font=("Segoe UI", 9, "bold"), 
-            bg="#3B0066", 
-            fg="#FFB6C1", 
-            activebackground="#FF007F",
-            activeforeground="white",
-            bd=1,
-            relief="solid",
-            padx=8,
-            pady=3,
-            cursor="hand2",
-            command=self.apenas_copiar_imagem
+    def _diretorio_executavel(self):
+        if getattr(sys, "frozen", False):
+            return os.path.dirname(sys.executable)
+        return os.path.dirname(os.path.abspath(__file__))
+
+    def _carregar_logo(self):
+        caminho_logo = os.path.join(self._diretorio_executavel(), "logo-ze.jpg")
+        if not os.path.isfile(caminho_logo):
+            return None
+        try:
+            logo = Image.open(caminho_logo).convert("RGB")
+            logo.thumbnail((176, 58), Image.Resampling.LANCZOS)
+            self.logo_tk = ImageTk.PhotoImage(logo)
+            return self.logo_tk
+        except Exception:
+            return None
+
+    def _montar_interface(self):
+        self.frame_topo = tk.Frame(self.root, bd=0, height=78)
+        self.frame_topo.pack(fill="x", side="top")
+        self.frame_topo.pack_propagate(False)
+        self._registrar_tema(self.frame_topo, "superficie")
+
+        frame_marca = tk.Frame(self.frame_topo, bd=0)
+        frame_marca.pack(side="left", fill="y", padx=(20, 10))
+        self._registrar_tema(frame_marca, "superficie")
+
+        logo = self._carregar_logo()
+        if logo:
+            self.lbl_logo = tk.Label(frame_marca, image=logo, bd=0)
+            self.lbl_logo.pack(side="left", padx=(0, 12), pady=9)
+            self._registrar_tema(self.lbl_logo, "superficie")
+
+        frame_titulos = tk.Frame(frame_marca, bd=0)
+        frame_titulos.pack(side="left", pady=12)
+        self._registrar_tema(frame_titulos, "superficie")
+
+        self.lbl_marca = tk.Label(
+            frame_titulos, text="ZÃ© do Encarte", font=("Segoe UI", 17, "bold"), anchor="w"
         )
-        btn_copiar.pack(side="right", padx=4)
+        self.lbl_marca.pack(anchor="w")
+        self._registrar_tema(self.lbl_marca, "titulo")
 
-        btn_atualizar = tk.Button(
-            self.frame_topo, 
-            text="🔄 Atualizar (F5)", 
-            font=("Segoe UI", 9, "bold"), 
-            bg="#3B0066", 
-            fg="#FFFFFF", 
-            activebackground="#FF007F",
-            activeforeground="white",
-            bd=1,
-            relief="solid",
-            padx=8,
-            pady=3,
-            cursor="hand2",
-            command=self.atualizar_paginas
+        self.lbl_status = tk.Label(
+            frame_titulos, text="â—  Encarte pronto para visualizar", font=("Segoe UI", 9), anchor="w"
         )
-        btn_atualizar.pack(side="right", padx=4)
+        self.lbl_status.pack(anchor="w", pady=(2, 0))
+        self._registrar_tema(self.lbl_status, "status")
 
-        btn_pasta = tk.Button(
-            self.frame_topo, 
-            text="📁 Abrir Pasta", 
-            font=("Segoe UI", 9), 
-            bg="#2A0042", 
-            fg="#E0E0E0", 
-            activebackground="#3B0066",
-            activeforeground="white",
-            bd=1,
-            relief="solid",
-            padx=8,
-            pady=3,
-            cursor="hand2",
-            command=self.abrir_pasta
+        frame_acoes = tk.Frame(self.frame_topo, bd=0)
+        frame_acoes.pack(side="right", fill="y", padx=(8, 20))
+        self._registrar_tema(frame_acoes, "superficie")
+
+        self.btn_tema = self._criar_botao(frame_acoes, "ðŸŒ™  Tema escuro", self.alternar_tema)
+        self.btn_tema.pack(side="right", padx=(7, 0), pady=18)
+
+        self.btn_whats = self._criar_botao(
+            frame_acoes, "Copiar e abrir WhatsApp", self.abrir_whatsapp, "primario"
         )
-        btn_pasta.pack(side="right", padx=4)
+        self.btn_whats.pack(side="right", padx=7, pady=18)
 
-        # BARRA DE NAVEGAÇÃO DE PÁGINAS E ZOOM
-        frame_nav = tk.Frame(self.root, bg="#1D0036")
-        frame_nav.pack(fill="x", side="top", ipady=3)
+        self.btn_copiar = self._criar_botao(frame_acoes, "Copiar imagem", self.apenas_copiar_imagem)
+        self.btn_copiar.pack(side="right", padx=4, pady=18)
 
-        self.btn_ant = tk.Button(
-            frame_nav, text="◀ Anterior", font=("Segoe UI", 9, "bold"), bg="#3B0066", fg="#FFFFFF",
-            activebackground="#FF007F", activeforeground="white", bd=0, padx=10,
-            state="disabled", command=self.pagina_anterior, cursor="hand2"
+        self.btn_atualizar = self._criar_botao(frame_acoes, "Atualizar  F5", self.atualizar_paginas)
+        self.btn_atualizar.pack(side="right", padx=4, pady=18)
+
+        self.btn_pasta = self._criar_botao(frame_acoes, "Abrir pasta", self.abrir_pasta)
+        self.btn_pasta.pack(side="right", padx=4, pady=18)
+
+        self.frame_nav = tk.Frame(self.root, bd=0, height=52)
+        self.frame_nav.pack(fill="x", side="top")
+        self.frame_nav.pack_propagate(False)
+        self._registrar_tema(self.frame_nav, "superficie_alt")
+
+        self.btn_ant = self._criar_botao(
+            self.frame_nav, "â€¹  Anterior", self.pagina_anterior, largura=11
         )
-        self.btn_ant.pack(side="left", padx=15)
+        self.btn_ant.pack(side="left", padx=(20, 6), pady=9)
+        self.btn_ant.config(state="disabled")
+
+        self.btn_prox = self._criar_botao(
+            self.frame_nav, "PrÃ³xima  â€º", self.proxima_pagina, largura=11
+        )
+        self.btn_prox.pack(side="left", padx=6, pady=9)
+        self.btn_prox.config(state="disabled")
 
         self.lbl_paginacao = tk.Label(
-            frame_nav, text="Carregando...", font=("Segoe UI", 10, "bold"), fg="#FFB6C1", bg="#1D0036"
+            self.frame_nav, text="Carregando...", font=("Segoe UI", 10, "bold")
         )
-        self.lbl_paginacao.pack(side="left", expand=True)
+        self.lbl_paginacao.pack(side="left", padx=18)
+        self._registrar_tema(self.lbl_paginacao, "texto")
 
-        # BOTÕES DE ZOOM
-        frame_zoom = tk.Frame(frame_nav, bg="#1D0036")
-        frame_zoom.pack(side="right", padx=15)
+        frame_zoom = tk.Frame(self.frame_nav, bd=0)
+        frame_zoom.pack(side="right", padx=20, pady=8)
+        self._registrar_tema(frame_zoom, "superficie_alt")
 
-        btn_zoom_out = tk.Button(
-            frame_zoom, text="🔍 -", font=("Segoe UI", 9, "bold"), bg="#3B0066", fg="#FFFFFF",
-            activebackground="#FF007F", activeforeground="white", bd=1, relief="solid",
-            padx=6, pady=1, cursor="hand2", command=self.diminuir_zoom
-        )
-        btn_zoom_out.pack(side="left", padx=2)
+        self.btn_zoom_out = self._criar_botao(frame_zoom, "âˆ’", self.diminuir_zoom, largura=3)
+        self.btn_zoom_out.config(font=("Segoe UI", 13, "bold"), padx=4, pady=3)
+        self.btn_zoom_out.pack(side="left", padx=2)
 
-        self.lbl_zoom = tk.Label(
-            frame_zoom, text="100%", font=("Segoe UI", 9, "bold"), fg="#FFB6C1", bg="#1D0036", width=5
-        )
-        self.lbl_zoom.pack(side="left", padx=2)
+        self.lbl_zoom = tk.Label(frame_zoom, text="100%", font=("Segoe UI", 9, "bold"), width=6)
+        self.lbl_zoom.pack(side="left", padx=3)
+        self._registrar_tema(self.lbl_zoom, "texto")
 
-        btn_zoom_in = tk.Button(
-            frame_zoom, text="🔍 +", font=("Segoe UI", 9, "bold"), bg="#3B0066", fg="#FFFFFF",
-            activebackground="#FF007F", activeforeground="white", bd=1, relief="solid",
-            padx=6, pady=1, cursor="hand2", command=self.aumentar_zoom
-        )
-        btn_zoom_in.pack(side="left", padx=2)
+        self.btn_zoom_in = self._criar_botao(frame_zoom, "+", self.aumentar_zoom, largura=3)
+        self.btn_zoom_in.config(font=("Segoe UI", 13, "bold"), padx=4, pady=3)
+        self.btn_zoom_in.pack(side="left", padx=2)
 
-        btn_zoom_reset = tk.Button(
-            frame_zoom, text="1:1", font=("Segoe UI", 8, "bold"), bg="#2A0042", fg="#E0E0E0",
-            activebackground="#3B0066", activeforeground="white", bd=1, relief="solid",
-            padx=4, pady=1, cursor="hand2", command=self.resetar_zoom
-        )
-        btn_zoom_reset.pack(side="left", padx=(4, 10))
+        self.btn_zoom_reset = self._criar_botao(frame_zoom, "1:1", self.resetar_zoom, largura=4)
+        self.btn_zoom_reset.config(padx=4, pady=5)
+        self.btn_zoom_reset.pack(side="left", padx=(5, 0))
 
-        self.btn_prox = tk.Button(
-            frame_nav, text="Próximo ▶", font=("Segoe UI", 9, "bold"), bg="#3B0066", fg="#FFFFFF",
-            activebackground="#FF007F", activeforeground="white", bd=0, padx=10,
-            state="disabled", command=self.proxima_pagina, cursor="hand2"
-        )
-        self.btn_prox.pack(side="right", padx=5)
+        self.container_canvas = tk.Frame(self.root, bd=0)
+        self.container_canvas.pack(fill="both", expand=True, padx=18, pady=(14, 18))
+        self._registrar_tema(self.container_canvas, "canvas")
 
-        # PAINEL CENTRAL COM SCROLLBARS
-        self.container_canvas = tk.Frame(self.root, bg="#120024")
-        self.container_canvas.pack(fill="both", expand=True)
-
-        self.v_scrollbar = tk.Scrollbar(self.container_canvas, orient="vertical")
+        self.v_scrollbar = tk.Scrollbar(self.container_canvas, orient="vertical", bd=0)
         self.v_scrollbar.pack(side="right", fill="y")
-
-        self.h_scrollbar = tk.Scrollbar(self.container_canvas, orient="horizontal")
+        self.h_scrollbar = tk.Scrollbar(self.container_canvas, orient="horizontal", bd=0)
         self.h_scrollbar.pack(side="bottom", fill="x")
 
         self.canvas = tk.Canvas(
-            self.container_canvas, 
-            bg="#120024", 
-            highlightthickness=0,
+            self.container_canvas,
+            highlightthickness=1,
             yscrollcommand=self.v_scrollbar.set,
-            xscrollcommand=self.h_scrollbar.set
+            xscrollcommand=self.h_scrollbar.set,
         )
         self.canvas.pack(side="left", fill="both", expand=True)
+        self._registrar_tema(self.canvas, "canvas")
 
         self.v_scrollbar.config(command=self.canvas.yview)
         self.h_scrollbar.config(command=self.canvas.xview)
-
-        # Eventos do Scroll do Rato
         self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
 
-        self.root.after(100, self.atualizar_paginas)
+    def aplicar_tema(self):
+        t = self.TEMAS[self.tema_atual]
+        self.root.configure(bg=t["fundo"])
+
+        for widget, papel, extras in self.widgets_tema:
+            try:
+                if papel == "superficie":
+                    widget.config(bg=t["superficie"])
+                elif papel == "superficie_alt":
+                    widget.config(bg=t["superficie_alt"])
+                elif papel == "titulo":
+                    widget.config(bg=t["superficie"], fg=t["texto"])
+                elif papel == "status":
+                    widget.config(bg=t["superficie"], fg=t["verde"])
+                elif papel == "texto":
+                    widget.config(bg=t["superficie_alt"], fg=t["texto"])
+                elif papel == "canvas":
+                    widget.config(bg=t["canvas"], highlightbackground=t["borda"])
+                elif papel == "primario":
+                    widget.config(
+                        bg=t["primaria"], fg=t["primaria_texto"],
+                        activebackground=t["primaria_ativa"], activeforeground=t["primaria_texto"],
+                        disabledforeground=t["texto_suave"],
+                    )
+                elif papel == "secundario":
+                    widget.config(
+                        bg=t["secundaria"], fg=t["texto"],
+                        activebackground=t["secundaria_ativa"], activeforeground=t["texto"],
+                        disabledforeground=t["texto_suave"],
+                    )
+                if extras:
+                    widget.config(**extras)
+            except tk.TclError:
+                pass
+
+        self.btn_tema.config(text="ðŸŒ™  Tema escuro" if self.tema_atual == "claro" else "â˜€  Tema claro")
+        self.atualizar_visualizacao()
+
+    def alternar_tema(self):
+        self.tema_atual = "escuro" if self.tema_atual == "claro" else "claro"
+        self.aplicar_tema()
 
     def _on_mousewheel(self, event):
         if event.state & 0x0004:
@@ -321,13 +391,13 @@ class AppVisualizador:
 
     def aumentar_zoom(self):
         if self.zoom_fator < 3.0:
-            self.zoom_fator += 0.2
+            self.zoom_fator = round(self.zoom_fator + 0.2, 1)
             self.lbl_zoom.config(text=f"{int(self.zoom_fator * 100)}%")
             self.atualizar_visualizacao()
 
     def diminuir_zoom(self):
         if self.zoom_fator > 0.4:
-            self.zoom_fator -= 0.2
+            self.zoom_fator = round(self.zoom_fator - 0.2, 1)
             self.lbl_zoom.config(text=f"{int(self.zoom_fator * 100)}%")
             self.atualizar_visualizacao()
 
@@ -350,43 +420,30 @@ class AppVisualizador:
                 if f.lower().endswith(('.jpg', '.jpeg')):
                     caminho_completo = os.path.join(pasta, f)
                     sem_ext = os.path.splitext(caminho_completo)[0]
-                    
                     if sem_ext == nome_limpo or sem_ext.startswith(nome_limpo + "_"):
                         arquivos_encontrados.append(caminho_completo)
-
-            if not arquivos_encontrados:
-                for f in os.listdir(pasta):
-                    if f.lower().endswith(('.jpg', '.jpeg')):
-                        arquivos_encontrados.append(os.path.join(pasta, f))
 
         def extrair_ordem(caminho):
             base = os.path.splitext(caminho)[0]
             match = re.search(r'_(\d+)$', base)
-            if match:
-                return int(match.group(1))
-            return 0
+            return int(match.group(1)) if match else 0
 
         arquivos_encontrados.sort(key=extrair_ordem)
-        
         resultado_final = []
         for item in arquivos_encontrados:
             if item not in resultado_final:
                 resultado_final.append(item)
-
         return resultado_final
 
     def atualizar_paginas(self):
-        novas_paginas = self.localizar_paginas_geradas(self.jpg_path)
-        self.lista_paginas = novas_paginas
-        
+        self.lista_paginas = self.localizar_paginas_geradas(self.jpg_path)
         if self.indice_atual >= len(self.lista_paginas):
             self.indice_atual = max(0, len(self.lista_paginas) - 1)
-            
         self.atualizar_visualizacao()
 
     def atualizar_visualizacao(self):
         self.canvas.delete("all")
-
+        t = self.TEMAS[self.tema_atual]
         w_canv = self.canvas.winfo_width()
         h_canv = self.canvas.winfo_height()
 
@@ -394,18 +451,17 @@ class AppVisualizador:
             cx = w_canv // 2 if w_canv > 50 else 590
             cy = h_canv // 2 if h_canv > 50 else 350
             self.canvas.create_text(
-                cx, cy, 
-                text=f"Aguardando arquivo de encarte em:\n{self.jpg_path}\n\nPressione F5 para atualizar.", 
-                fill="#FFB6C1", font=("Segoe UI", 12), justify="center"
+                cx, cy,
+                text=f"Aguardando o encarte informado\n{self.jpg_path}\n\nPressione F5 para atualizar.",
+                fill=t["texto_suave"], font=("Segoe UI", 12), justify="center"
             )
-            self.lbl_paginacao.config(text="Página 0 de 0")
+            self.lbl_paginacao.config(text="PÃ¡gina 0 de 0")
             self.btn_ant.config(state="disabled")
             self.btn_prox.config(state="disabled")
             return
 
         total = len(self.lista_paginas)
-        self.lbl_paginacao.config(text=f"Página {self.indice_atual + 1} de {total}")
-
+        self.lbl_paginacao.config(text=f"PÃ¡gina {self.indice_atual + 1} de {total}")
         self.btn_ant.config(state="normal" if self.indice_atual > 0 else "disabled")
         self.btn_prox.config(state="normal" if self.indice_atual < total - 1 else "disabled")
 
@@ -413,29 +469,22 @@ class AppVisualizador:
         try:
             self.pil_img = Image.open(caminho_atual)
             img_w, img_h = self.pil_img.size
-            
             max_w = max(300, w_canv - 60) if w_canv > 60 else 1050
             max_h = max(300, h_canv - 40) if h_canv > 40 else 650
-            
             base_ratio = min(max_w / img_w, max_h / img_h)
-            
-            final_w = int(img_w * base_ratio * self.zoom_fator)
-            final_h = int(img_h * base_ratio * self.zoom_fator)
-
+            final_w = max(1, int(img_w * base_ratio * self.zoom_fator))
+            final_h = max(1, int(img_h * base_ratio * self.zoom_fator))
             img_resized = self.pil_img.resize((final_w, final_h), Image.Resampling.LANCZOS)
             self.tk_img = ImageTk.PhotoImage(img_resized)
-
             pos_x = max(w_canv // 2, final_w // 2 + 10)
             pos_y = max(h_canv // 2, final_h // 2 + 10)
-
             self.canvas.create_image(pos_x, pos_y, image=self.tk_img, anchor="center")
             self.canvas.config(scrollregion=(0, 0, max(w_canv, final_w + 40), max(h_canv, final_h + 40)))
-
         except Exception as e:
             cx = w_canv // 2 if w_canv > 50 else 590
             cy = h_canv // 2 if h_canv > 50 else 350
             self.canvas.create_text(
-                cx, cy, text=f"Erro ao carregar imagem:\n{e}", fill="#FF007F", font=("Segoe UI", 12)
+                cx, cy, text=f"Erro ao carregar imagem:\n{e}", fill=t["erro"], font=("Segoe UI", 12)
             )
 
     def pagina_anterior(self):
@@ -449,50 +498,38 @@ class AppVisualizador:
             self.atualizar_visualizacao()
 
     def apenas_copiar_imagem(self):
-        """Apenas copia a página atual para a área de transferência."""
         if not self.lista_paginas:
             return
-
         caminho_atual = self.lista_paginas[self.indice_atual]
         copiou = copiar_imagem_para_clipboard(caminho_atual)
-
         if copiou:
             messagebox.showinfo(
-                "Imagem Copiada!", 
-                f"A Página {self.indice_atual + 1} foi copiada!\n\n"
-                "Pressione CTRL + V no WhatsApp ou conversa para colar."
+                "Imagem copiada",
+                f"A pÃ¡gina {self.indice_atual + 1} foi copiada.\n\nPressione CTRL + V para colar."
             )
         else:
-            messagebox.showerror("Erro ao Copiar", "Não foi possível copiar a imagem para a área de transferência.")
+            messagebox.showerror("Erro ao copiar", "NÃ£o foi possÃ­vel copiar a imagem.")
 
     def abrir_whatsapp(self):
         if not self.lista_paginas:
             return
-
         caminho_atual = self.lista_paginas[self.indice_atual]
         copiou = copiar_imagem_para_clipboard(caminho_atual)
-
-        # Atualiza metadados antes de abrir o link
         self.meta = ler_metadados_csv(self.csv_path)
         self.num_whats = limpar_numero_whatsapp(self.meta.get('fone', ''))
-
         nome_contato = self.meta.get('nome_contato', '')
-        saudacao = f"Olá {nome_contato}!" if nome_contato else "Olá!"
+        saudacao = f"OlÃ¡ {nome_contato}!" if nome_contato else "OlÃ¡!"
         mensagem = f"{saudacao} Segue nosso {self.meta.get('titulo', 'Encarte de Ofertas')}."
         msg_encoded = urllib.parse.quote(mensagem)
-
         if self.num_whats:
             url = f"https://api.whatsapp.com/send?phone={self.num_whats}&text={msg_encoded}"
         else:
             url = f"https://web.whatsapp.com/send?text={msg_encoded}"
-
         webbrowser.open(url)
-
         if copiou:
             messagebox.showinfo(
-                "Página Copiada!", 
-                f"A Página {self.indice_atual + 1} foi copiada!\n\n"
-                "O WhatsApp foi aberto na tela. Basta pressionar CTRL + V na conversa para colar a imagem!"
+                "PÃ¡gina copiada",
+                f"A pÃ¡gina {self.indice_atual + 1} foi copiada.\n\nNo WhatsApp, pressione CTRL + V para colar."
             )
 
     def abrir_pasta(self):
@@ -523,3 +560,4 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = AppVisualizador(root, pasta_parametros=pasta_param, jpg_path=arquivo_jpg)
     root.mainloop()
+
