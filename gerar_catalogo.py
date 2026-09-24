@@ -72,7 +72,7 @@ def gerar_imagem_qrcode(url_completa, tam_px=110):
     except Exception:
         pass
 
-    # Fallback caso esteja sem conexão
+    # Fallback caso esteja sem conexÃ£o
     img_qr = Image.new("RGB", (tam_px, tam_px), (255, 255, 255))
     d_qr = ImageDraw.Draw(img_qr)
     d_qr.rectangle([2, 2, tam_px-3, tam_px-3], outline=(0, 0, 0), width=2)
@@ -80,12 +80,15 @@ def gerar_imagem_qrcode(url_completa, tam_px=110):
     return img_qr
 
 def criar_card_qrcode_estilizado(url_site, cor_tema_rgb, tam_qr=110):
-    url_limpa = str(url_site).strip() if url_site else "www.oestepharma.com.br"
+    url_limpa = str(url_site or "").strip()
+    if not url_limpa:
+        return None
+
     url_completa = url_limpa if url_limpa.startswith(("http://", "https://")) else "https://" + url_limpa
 
     img_qr = gerar_imagem_qrcode(url_completa, tam_px=tam_qr)
 
-    # Dimensões do card ajustadas para não cortar texto
+    # DimensÃµes do card ajustadas para nÃ£o cortar texto
     w_card, h_card = tam_qr + 40, tam_qr + 95
     card = Image.new("RGBA", (w_card, h_card), (255, 255, 255, 0))
     draw = ImageDraw.Draw(card)
@@ -109,7 +112,7 @@ def criar_card_qrcode_estilizado(url_site, cor_tema_rgb, tam_qr=110):
     site_exibicao = url_limpa.replace("https://", "").replace("http://", "")
     draw.text((w_card // 2, y_tarja + 10), site_exibicao, fill="#FFFFFF", font=font_url, anchor="mm")
 
-    draw.text((w_card // 2, h_card - 16), "APONTE A CÂMERA DO CELULAR", fill="#333333", font=font_sub, anchor="mm")
+    draw.text((w_card // 2, h_card - 16), "APONTE A CÃ‚MERA DO CELULAR", fill="#333333", font=font_sub, anchor="mm")
     draw.text((w_card // 2, h_card - 6), "E ACESSE AGORA", fill="#333333", font=font_sub, anchor="mm")
 
     return card
@@ -184,7 +187,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
     MARGEM_TOPO_CONTEUDO = ALTURA_CABECALHO + 30
 
     if not caminho_saida_base:
-        caminho_saida_base = config.get('saida_jpg', 'CATALOGO.JPG')
+        caminho_saida_base = config.get('saida_jpg', 'ENCARTE.JPG')
 
     pasta_dest = os.path.dirname(caminho_saida_base)
     if pasta_dest and not os.path.exists(pasta_dest):
@@ -264,7 +267,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
 
                 cod_str = str(prod.get('codigo', '')).zfill(5)
                 marca_str = str(prod.get('marca', '')).upper()
-                draw.text((x + larg_card_dest_padrao - 15, y_cursor + 27), f"CÓD: {cod_str}", fill="#555555", font=font_cod_bold, anchor="rm")
+                draw.text((x + larg_card_dest_padrao - 15, y_cursor + 27), f"CÃ“D: {cod_str}", fill="#555555", font=font_cod_bold, anchor="rm")
 
                 area_foto_x, area_foto_y = x + 15, y_cursor + 50
                 area_foto_w, area_foto_h = larg_card_dest_padrao - 30, 320
@@ -316,7 +319,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
                 draw.rounded_rectangle([x, y, x + larg_card_norm_padrao, y + alt_card_norm], radius=10, outline="#E0E0E0", fill="#FFFFFF", width=2)
 
                 cod_str = str(prod.get('codigo', '')).zfill(5)
-                draw.text((x + 12, y + 15), f"CÓD: {cod_str}", fill="#000000", font=font_cod_bold)
+                draw.text((x + 12, y + 15), f"CÃ“D: {cod_str}", fill="#000000", font=font_cod_bold)
 
                 marca_str = str(prod.get('marca', '')).upper()
                 if marca_str:
@@ -353,12 +356,15 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
         y_rodape = ALTURA_FIXA_FINAL - ALTURA_RODAPE
         draw.rectangle([0, y_rodape, LARGURA_TOTAL, ALTURA_FIXA_FINAL], fill=cor_rodape_bg)
 
-        site_url = config.get('cabecalho_site') or config.get('rodape_site') or 'www.oestepharma.com.br'
-        
-        card_qr = criar_card_qrcode_estilizado(site_url, cor_rodape_bg, tam_qr=110)
-        qr_x = MARGEM_LATERAL + 10
-        qr_y = y_rodape + 10
-        img.paste(card_qr, (qr_x, qr_y), card_qr)
+        # O site e o QR Code do rodape usam somente o valor recebido no CSV.
+        # Se rodape_site estiver vazio, nenhum QR Code ou endereÃ§o serÃ¡ exibido.
+        site_url = str(config.get('rodape_site', '')).strip()
+        if site_url:
+            card_qr = criar_card_qrcode_estilizado(site_url, cor_rodape_bg, tam_qr=110)
+            if card_qr:
+                qr_x = MARGEM_LATERAL + 10
+                qr_y = y_rodape + 10
+                img.paste(card_qr, (qr_x, qr_y), card_qr)
 
         contato_str = str(config.get('rodape_contato', '')).strip()
         fone_str = str(config.get('rodape_fone', '')).strip()
@@ -391,7 +397,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
 
         validade_str = str(config.get('rodape_validade', '')).strip()
         if validade_str:
-            draw.text(((LARGURA_TOTAL + 150) // 2, y_rodape + 100), f"Preços válidos no período: {validade_str}", fill="#E0E0E0", font=font_rod_validade, anchor="mm")
+            draw.text(((LARGURA_TOTAL + 150) // 2, y_rodape + 100), f"PreÃ§os vÃ¡lidos no perÃ­odo: {validade_str}", fill="#E0E0E0", font=font_rod_validade, anchor="mm")
 
         tabela_str = str(config.get('rodape_tabela', '')).strip()
         if tabela_str:
