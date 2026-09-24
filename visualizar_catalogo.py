@@ -4,11 +4,10 @@ import os
 import io
 import csv
 import re
-import subprocess
 import webbrowser
 import urllib.parse
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import filedialog, messagebox
 from PIL import Image, ImageTk, ImageDraw
 
 # Biblioteca do Windows para manipular Ã¡rea de transferÃªncia
@@ -19,44 +18,35 @@ except ImportError:
     WIN32_DISPONIVEL = False
 
 def copiar_imagem_para_clipboard(caminho_img):
-    """Copia a imagem para o Clipboard do Windows (CompatÃ­vel com RDP e WhatsApp)."""
+    """Copia a imagem para o Clipboard usando somente a API nativa do Windows."""
     if not os.path.exists(caminho_img):
         return False
 
     abs_path = os.path.abspath(caminho_img)
 
-    # Tenta copiar como Bitmap nativo
-    if WIN32_DISPONIVEL:
-        try:
-            image = Image.open(abs_path)
+    if not WIN32_DISPONIVEL:
+        return False
+
+    clipboard_aberto = False
+    try:
+        with Image.open(abs_path) as image:
             output = io.BytesIO()
             image.convert("RGB").save(output, "BMP")
             data = output.getvalue()[14:]
-            output.close()
 
-            win32clipboard.OpenClipboard()
-            win32clipboard.EmptyClipboard()
-            win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data)
-            win32clipboard.CloseClipboard()
-            return True
-        except Exception:
-            pass
-
-    # Fallback confiÃ¡vel via PowerShell (copia como arquivo/imagem pronta para CTRL+V)
-    try:
-        ps_script = f"Set-Clipboard -Path '{abs_path}'"
-        subprocess.run(["powershell", "-command", ps_script], capture_output=True, check=True)
+        win32clipboard.OpenClipboard()
+        clipboard_aberto = True
+        win32clipboard.EmptyClipboard()
+        win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data)
         return True
     except Exception:
-        try:
-            ps_script = (
-                f"Add-Type -AssemblyName System.Windows.Forms; "
-                f"[System.Windows.Forms.Clipboard]::SetImage([System.Drawing.Image]::FromFile('{abs_path}'))"
-            )
-            subprocess.run(["powershell", "-command", ps_script], capture_output=True, check=True)
-            return True
-        except Exception:
-            return False
+        return False
+    finally:
+        if clipboard_aberto:
+            try:
+                win32clipboard.CloseClipboard()
+            except Exception:
+                pass
 
 def ler_metadados_csv(csv_path):
     """LÃª o cabeÃ§alho/metadados do CSV gerado."""
@@ -109,6 +99,33 @@ def limpar_numero_whatsapp(fone_raw):
     if len(apenas_numeros) in [10, 11]:
         return "55" + apenas_numeros
     return apenas_numeros
+
+
+EXTENSOES_IMAGEM = (".jpg", ".jpeg", ".png", ".bmp")
+
+
+def localizar_arquivo_encarte(pasta):
+    """Localiza a primeira imagem cujo nome contenha a palavra 'encarte'."""
+    pasta = os.path.abspath(pasta or os.getcwd())
+    if not os.path.isdir(pasta):
+        return ""
+
+    candidatos = []
+    for nome in os.listdir(pasta):
+        caminho = os.path.join(pasta, nome)
+        nome_minusculo = nome.lower()
+        if (os.path.isfile(caminho)
+                and "encarte" in nome_minusculo
+                and nome_minusculo.endswith(EXTENSOES_IMAGEM)):
+            candidatos.append(caminho)
+
+    def ordem_natural(caminho):
+        nome = os.path.basename(caminho).lower()
+        return [int(parte) if parte.isdigit() else parte
+                for parte in re.split(r"(\d+)", nome)]
+
+    candidatos.sort(key=ordem_natural)
+    return candidatos[0] if candidatos else ""
 
 class AppVisualizador:
     TEMAS = {
@@ -330,6 +347,10 @@ class AppVisualizador:
         self._definir_icone_botao(self.btn_atualizar, "atualizar", "#0EA5E9")
         self.btn_atualizar.pack(side="right", padx=4, pady=27)
 
+        self.btn_arquivo = self._criar_botao(frame_acoes, "Abrir arquivo", self.abrir_arquivo)
+        self._definir_icone_botao(self.btn_arquivo, "arquivo", "#0EA5E9")
+        self.btn_arquivo.pack(side="right", padx=4, pady=27)
+
         self.btn_pasta = self._criar_botao(frame_acoes, "Abrir pasta", self.abrir_pasta)
         self._definir_icone_botao(self.btn_pasta, "pasta", "#0EA5E9")
         self.btn_pasta.pack(side="right", padx=4, pady=27)
@@ -339,8 +360,12 @@ class AppVisualizador:
         self.frame_nav.pack_propagate(False)
         self._registrar_tema(self.frame_nav, "superficie_alt")
 
-        frame_paginacao = tk.Frame(self.frame_nav, bd=0)
-        frame_paginacao.pack(side="left", padx=20, pady=8)
+        frame_controles_direita = tk.Frame(self.frame_nav, bd=0)
+        frame_controles_direita.pack(side="right", padx=20, pady=8)
+        self._registrar_tema(frame_controles_direita, "superficie_alt")
+
+        frame_paginacao = tk.Frame(frame_controles_direita, bd=0)
+        frame_paginacao.pack(side="left", padx=(0, 14))
         self._registrar_tema(frame_paginacao, "superficie_alt")
 
         self.btn_ant = self._criar_botao(frame_paginacao, "<", self.pagina_anterior, largura=3)
@@ -348,7 +373,7 @@ class AppVisualizador:
         self.btn_ant.pack(side="left", padx=(0, 5))
 
         self.lbl_paginacao = tk.Label(
-            frame_paginacao, text="PÃ¡gina 0 a 0", font=("Segoe UI", 10, "bold"), width=14
+            frame_paginacao, text="P\u00e1gina 0 a 0", font=("Segoe UI", 10, "bold"), width=14
         )
         self.lbl_paginacao.pack(side="left", padx=3)
         self._registrar_tema(self.lbl_paginacao, "texto")
@@ -357,8 +382,8 @@ class AppVisualizador:
         self.btn_prox.config(font=("Segoe UI", 13, "bold"), padx=4, pady=3, state="disabled")
         self.btn_prox.pack(side="left", padx=(5, 0))
 
-        frame_controles = tk.Frame(self.frame_nav, bd=0)
-        frame_controles.pack(side="right", padx=20, pady=8)
+        frame_controles = tk.Frame(frame_controles_direita, bd=0)
+        frame_controles.pack(side="left")
         self._registrar_tema(frame_controles, "superficie_alt")
 
         self.btn_zoom_out = self._criar_botao(frame_controles, "-", self.diminuir_zoom, largura=3)
@@ -488,7 +513,7 @@ class AppVisualizador:
         arquivos_encontrados = []
         if os.path.exists(pasta):
             for f in os.listdir(pasta):
-                if f.lower().endswith(('.jpg', '.jpeg')):
+                if f.lower().endswith(EXTENSOES_IMAGEM):
                     caminho_completo = os.path.join(pasta, f)
                     sem_ext = os.path.splitext(caminho_completo)[0]
                     if sem_ext == nome_limpo or sem_ext.startswith(nome_limpo + "_"):
@@ -526,13 +551,13 @@ class AppVisualizador:
                 text=f"Aguardando o encarte informado\n{self.jpg_path}\n\nPressione F5 para atualizar.",
                 fill=t["texto_suave"], font=("Segoe UI", 12), justify="center"
             )
-            self.lbl_paginacao.config(text="PÃ¡gina 0 a 0")
+            self.lbl_paginacao.config(text="P\u00e1gina 0 a 0")
             self.btn_ant.config(state="disabled")
             self.btn_prox.config(state="disabled")
             return
 
         total = len(self.lista_paginas)
-        self.lbl_paginacao.config(text=f"PÃ¡gina {self.indice_atual + 1} a {total}")
+        self.lbl_paginacao.config(text=f"P\u00e1gina {self.indice_atual + 1} a {total}")
         self.btn_ant.config(state="normal" if self.indice_atual > 0 else "disabled")
         self.btn_prox.config(state="normal" if self.indice_atual < total - 1 else "disabled")
 
@@ -603,30 +628,66 @@ class AppVisualizador:
                 f"A pÃ¡gina {self.indice_atual + 1} foi copiada.\n\nNo WhatsApp, pressione CTRL + V para colar."
             )
 
+    def abrir_arquivo(self):
+        pasta_inicial = os.path.dirname(self.jpg_path) if self.jpg_path else os.getcwd()
+        if not os.path.isdir(pasta_inicial):
+            pasta_inicial = os.getcwd()
+
+        caminho = filedialog.askopenfilename(
+            parent=self.root,
+            title="Abrir imagem do encarte",
+            initialdir=pasta_inicial,
+            filetypes=[
+                ("Imagens", "*.jpg *.jpeg *.png *.bmp"),
+                ("JPEG", "*.jpg *.jpeg"),
+                ("PNG", "*.png"),
+                ("Bitmap", "*.bmp"),
+                ("Todos os arquivos", "*.*"),
+            ],
+        )
+        if not caminho:
+            return
+
+        self.jpg_path = os.path.abspath(caminho)
+        self.csv_path = os.path.splitext(self.jpg_path)[0] + ".csv"
+        self.meta = ler_metadados_csv(self.csv_path)
+        self.num_whats = limpar_numero_whatsapp(self.meta.get("fone", ""))
+        self.indice_atual = 0
+        self.atualizar_paginas()
+
     def abrir_pasta(self):
         caminho_target = self.lista_paginas[self.indice_atual] if self.lista_paginas else self.jpg_path
-        if os.path.exists(caminho_target):
-            os.system(f'explorer /select,"{os.path.abspath(caminho_target)}"')
-        elif os.path.exists(os.path.dirname(caminho_target)):
-            os.system(f'explorer "{os.path.abspath(os.path.dirname(caminho_target))}"')
+        pasta = caminho_target if os.path.isdir(caminho_target) else os.path.dirname(caminho_target)
+        if pasta and os.path.isdir(pasta):
+            try:
+                os.startfile(os.path.abspath(pasta))
+            except (AttributeError, OSError):
+                messagebox.showerror("Erro ao abrir pasta", "NÃ£o foi possÃ­vel abrir a pasta do encarte.")
 
 if __name__ == "__main__":
     args = sys.argv[1:]
-    
+
     if len(args) >= 2:
         pasta_param = args[0]
         arquivo_jpg = args[1]
     elif len(args) == 1:
         param1 = args[0]
-        if param1.lower().endswith(('.jpg', '.jpeg')):
+        if param1.lower().endswith(EXTENSOES_IMAGEM):
             arquivo_jpg = param1
             pasta_param = os.path.dirname(param1) or os.getcwd()
         else:
             pasta_param = param1
-            arquivo_jpg = os.path.join(pasta_param, "CATALOGO_OESTE_PHARMA.JPG")
+            arquivo_jpg = localizar_arquivo_encarte(pasta_param)
     else:
         pasta_param = os.getcwd()
-        arquivo_jpg = os.path.join(pasta_param, "CATALOGO_OESTE_PHARMA.JPG")
+        arquivo_jpg = localizar_arquivo_encarte(pasta_param)
+
+    if not arquivo_jpg:
+        messagebox.showerror(
+            "Encarte nÃ£o encontrado",
+            "Nenhuma imagem JPG, JPEG, PNG ou BMP com a palavra 'encarte' no nome foi encontrada na pasta informada."
+        )
+        sys.exit(1)
 
     root = tk.Tk()
     app = AppVisualizador(root, pasta_parametros=pasta_param, jpg_path=arquivo_jpg)
