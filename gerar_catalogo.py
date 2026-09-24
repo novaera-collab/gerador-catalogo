@@ -171,16 +171,16 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
     cor_fundo_demais   = hex_to_rgb(hex_demais, (183, 235, 213))
 
     try:
-        font_sub_titulo     = ImageFont.truetype("arialbd.ttf", 32)
-        font_cod_bold       = ImageFont.truetype("arialbd.ttf", 18)
-        font_desc_bold      = ImageFont.truetype("arialbd.ttf", 19)
-        font_marca          = ImageFont.truetype("arialbd.ttf", 16)
-        font_marca_normal   = ImageFont.truetype("arialbd.ttf", 15)
+        font_sub_titulo     = ImageFont.truetype("arialbd.ttf", 34)
+        font_cod_bold       = ImageFont.truetype("arialbd.ttf", 19)
+        font_desc_bold      = ImageFont.truetype("arialbd.ttf", 22)
+        font_marca          = ImageFont.truetype("arialbd.ttf", 19)
+        font_marca_normal   = ImageFont.truetype("arialbd.ttf", 19)
         font_preco_destaque = ImageFont.truetype("arialbd.ttf", 54)
         font_preco_normal   = ImageFont.truetype("arialbd.ttf", 38)
         font_rod_destaque   = ImageFont.truetype("arialbd.ttf", 26)
-        font_rod_validade   = ImageFont.truetype("arial.ttf", 20)
-        font_rod_tabela     = ImageFont.truetype("arial.ttf", 18)
+        font_rod_validade   = ImageFont.truetype("arial.ttf", 22)
+        font_rod_tabela     = ImageFont.truetype("arial.ttf", 20)
     except IOError:
         font_sub_titulo = font_cod_bold = font_desc_bold = font_marca = font_marca_normal = font_preco_destaque = font_preco_normal = font_rod_destaque = font_rod_validade = font_rod_tabela = ImageFont.load_default()
 
