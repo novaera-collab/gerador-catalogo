@@ -135,6 +135,18 @@ def limpar_jpgs_antigos(caminho_saida_base):
     except Exception:
         pass
 
+def normalizar_caminho_argumento(valor):
+    """Limpa aspas e normaliza caminhos recebidos pela linha de comando."""
+    if valor is None:
+        return None
+    caminho = str(valor).strip()
+    if len(caminho) >= 2 and caminho[0] == caminho[-1] and caminho[0] in ('"', "'"):
+        caminho = caminho[1:-1].strip()
+    if not caminho:
+        return None
+    return os.path.normpath(os.path.expandvars(os.path.expanduser(caminho)))
+
+
 def renderizar_catalogo(config, produtos, caminho_saida_base):
     prods_destaque = [p for p in produtos if str(p.get('destaque', '')).strip().upper() == 'S']
     prods_normais = [p for p in produtos if str(p.get('destaque', '')).strip().upper() != 'S']
@@ -186,8 +198,9 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
     ALTURA_CABECALHO = img_cabecalho.height if img_cabecalho else 270
     MARGEM_TOPO_CONTEUDO = ALTURA_CABECALHO + 30
 
+    caminho_saida_base = normalizar_caminho_argumento(caminho_saida_base)
     if not caminho_saida_base:
-        caminho_saida_base = config.get('saida_jpg', 'ENCARTE.JPG')
+        caminho_saida_base = normalizar_caminho_argumento(config.get('saida_jpg')) or 'ENCARTE.JPG'
 
     pasta_dest = os.path.dirname(caminho_saida_base)
     if pasta_dest and not os.path.exists(pasta_dest):
@@ -408,44 +421,60 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
         pag_num += 1
 
 if __name__ == "__main__":
+    arquivo_csv = None
+    saida_cli = None
     try:
-        if len(sys.argv) >= 2:
-            arquivo_csv = sys.argv[1]
-            saida_cli = sys.argv[2] if len(sys.argv) >= 3 else None
+        if len(sys.argv) < 2:
+            raise ValueError("Informe o arquivo CSV como primeiro parÃ¢metro.")
 
-            config = {}
-            produtos = []
+        # O ERP envia: GERAR_CATALOGO.EXE <arquivo.csv> <arquivo.jpg>
+        arquivo_csv = normalizar_caminho_argumento(sys.argv[1])
+        saida_cli = normalizar_caminho_argumento(sys.argv[2]) if len(sys.argv) >= 3 else None
 
-            if os.path.exists(arquivo_csv):
-                with open(arquivo_csv, mode='r', encoding='utf-8-sig') as f:
-                    linhas = f.readlines()
-                    lendo_produtos = False
-                    linhas_produtos = []
+        if not arquivo_csv or not os.path.isfile(arquivo_csv):
+            raise FileNotFoundError(f"Arquivo CSV nÃ£o encontrado: {arquivo_csv or '(vazio)'}")
 
-                    for linha in linhas:
-                        linha_str = linha.strip()
-                        if not linha_str:
-                            continue
+        config = {}
+        produtos = []
 
-                        if linha_str.lower().startswith('codigo;'):
-                            lendo_produtos = True
-                            linhas_produtos.append(linha_str)
-                            continue
+        with open(arquivo_csv, mode='r', encoding='utf-8-sig') as f:
+            linhas = f.readlines()
+            lendo_produtos = False
+            linhas_produtos = []
 
-                        if not lendo_produtos:
-                            partes = linha_str.split(';')
-                            if len(partes) >= 2:
-                                config[partes[0].strip()] = partes[1].strip()
-                        else:
-                            linhas_produtos.append(linha_str)
+            for linha in linhas:
+                linha_str = linha.strip()
+                if not linha_str:
+                    continue
 
-                    if linhas_produtos:
-                        reader = csv.DictReader(linhas_produtos, delimiter=';')
-                        for row in reader:
-                            produtos.append(row)
+                if linha_str.lower().startswith('codigo;'):
+                    lendo_produtos = True
+                    linhas_produtos.append(linha_str)
+                    continue
 
-            renderizar_catalogo(config, produtos, saida_cli)
+                if not lendo_produtos:
+                    partes = linha_str.split(';')
+                    if len(partes) >= 2:
+                        config[partes[0].strip()] = partes[1].strip()
+                else:
+                    linhas_produtos.append(linha_str)
 
-    except Exception as e:
-        with open("erro_log.txt", "w", encoding="utf-8") as f_err:
-            f_err.write(traceback.format_exc())
+            if linhas_produtos:
+                reader = csv.DictReader(linhas_produtos, delimiter=';')
+                produtos.extend(reader)
+
+        # O segundo parÃ¢metro sempre prevalece sobre saida_jpg do CSV.
+        renderizar_catalogo(config, produtos, saida_cli)
+
+    except Exception:
+        # Salva o erro ao lado do JPG pedido; assim o ERP nÃ£o esconde a causa.
+        pasta_log = os.path.dirname(saida_cli) if saida_cli else os.path.dirname(arquivo_csv or '')
+        if not pasta_log or not os.path.isdir(pasta_log):
+            pasta_log = os.getcwd()
+        caminho_log = os.path.join(pasta_log, "erro_gerar_encarte.log")
+        try:
+            with open(caminho_log, "w", encoding="utf-8") as f_err:
+                f_err.write("Argumentos recebidos: " + repr(sys.argv) + "\n\n")
+                f_err.write(traceback.format_exc())
+        except Exception:
+            pass
