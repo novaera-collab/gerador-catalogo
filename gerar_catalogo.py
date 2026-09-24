@@ -73,7 +73,7 @@ def gerar_imagem_qrcode(url_completa, tam_px=110):
     except Exception:
         pass
 
-    # Fallback caso esteja sem conexÃ£o
+    # Fallback caso esteja sem conexÃƒÂ£o
     img_qr = Image.new("RGB", (tam_px, tam_px), (255, 255, 255))
     d_qr = ImageDraw.Draw(img_qr)
     d_qr.rectangle([2, 2, tam_px-3, tam_px-3], outline=(0, 0, 0), width=2)
@@ -89,7 +89,7 @@ def criar_card_qrcode_estilizado(url_site, cor_tema_rgb, tam_qr=110):
 
     img_qr = gerar_imagem_qrcode(url_completa, tam_px=tam_qr)
 
-    # DimensÃµes do card ajustadas para nÃ£o cortar texto
+    # DimensÃƒÂµes do card ajustadas para nÃƒÂ£o cortar texto
     w_card, h_card = tam_qr + 40, tam_qr + 95
     card = Image.new("RGBA", (w_card, h_card), (255, 255, 255, 0))
     draw = ImageDraw.Draw(card)
@@ -113,7 +113,7 @@ def criar_card_qrcode_estilizado(url_site, cor_tema_rgb, tam_qr=110):
     site_exibicao = url_limpa.replace("https://", "").replace("http://", "")
     draw.text((w_card // 2, y_tarja + 10), site_exibicao, fill="#FFFFFF", font=font_url, anchor="mm")
 
-    draw.text((w_card // 2, h_card - 16), "APONTE A CÃ‚MERA DO CELULAR", fill="#333333", font=font_sub, anchor="mm")
+    draw.text((w_card // 2, h_card - 16), "APONTE A CÃƒâ€šMERA DO CELULAR", fill="#333333", font=font_sub, anchor="mm")
     draw.text((w_card // 2, h_card - 6), "E ACESSE AGORA", fill="#333333", font=font_sub, anchor="mm")
 
     return card
@@ -281,11 +281,11 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
 
                 cod_str = str(prod.get('codigo', '')).zfill(5)
                 marca_str = str(prod.get('marca', '')).upper()
-                draw.text((x + larg_card_dest_padrao - 15, y_cursor + 27), f"CÃ“D: {cod_str}", fill="#555555", font=font_cod_bold, anchor="rm")
+                draw.text((x + larg_card_dest_padrao - 15, y_cursor + 27), f"Código: {cod_str}", fill="#555555", font=font_cod_bold, anchor="rm")
 
                 area_foto_x, area_foto_y = x + 15, y_cursor + 50
                 area_foto_w, area_foto_h = larg_card_dest_padrao - 30, 320
-                
+
                 draw.rounded_rectangle([area_foto_x, area_foto_y, area_foto_x + area_foto_w, area_foto_y + area_foto_h], radius=8, fill="#FFFFFF")
 
                 foto_prod = carregar_e_ajustar_imagem(prod.get('foto'), area_foto_w - 10, area_foto_h - 10)
@@ -309,7 +309,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
                 tarja_y1 = y_cursor + 475
                 tarja_y2 = y_cursor + alt_card_dest - 12
                 draw.rounded_rectangle([x + 10, tarja_y1, x + larg_card_dest_padrao - 10, tarja_y2], radius=10, fill=cor_tarja_bg)
-                
+
                 preco_fmt = str(prod.get('preco', '')).strip()
                 draw.text((x + larg_card_dest_padrao//2, tarja_y1 + (tarja_y2 - tarja_y1)//2), preco_fmt, fill=cor_preco_texto, font=font_preco_destaque, anchor="mm")
 
@@ -318,7 +318,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
         # 3. Produtos Normais
         if current_norm:
             total_normais = len(current_norm)
-            
+
             for idx, prod in enumerate(current_norm):
                 row = idx // cols_normal_base
                 col = idx % cols_normal_base
@@ -326,14 +326,14 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
                 itens_na_linha = min(cols_normal_base, total_normais - (row * cols_normal_base))
                 largura_linha_n = (itens_na_linha * larg_card_norm_padrao) + ((itens_na_linha - 1) * ESPACO_HORIZ)
                 x_inicial_n = (LARGURA_TOTAL - largura_linha_n) // 2
-                
+
                 x = x_inicial_n + col * (larg_card_norm_padrao + ESPACO_HORIZ)
                 y = y_cursor + row * (alt_card_norm + ESPACO_VERT)
 
                 draw.rounded_rectangle([x, y, x + larg_card_norm_padrao, y + alt_card_norm], radius=10, outline="#E0E0E0", fill="#FFFFFF", width=2)
 
                 cod_str = str(prod.get('codigo', '')).zfill(5)
-                draw.text((x + 12, y + 15), f"CÃ“D: {cod_str}", fill="#000000", font=font_cod_bold)
+                draw.text((x + 12, y + 15), f"CÃƒâ€œD: {cod_str}", fill="#000000", font=font_cod_bold)
 
                 marca_str = str(prod.get('marca', '')).upper()
                 if marca_str:
@@ -371,7 +371,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
         draw.rectangle([0, y_rodape, LARGURA_TOTAL, ALTURA_FIXA_FINAL], fill=cor_rodape_bg)
 
         # O site e o QR Code do rodape usam somente o valor recebido no CSV.
-        # Se rodape_site estiver vazio, nenhum QR Code ou endereÃ§o serÃ¡ exibido.
+        # Se rodape_site estiver vazio, nenhum QR Code ou endereÃƒÂ§o serÃƒÂ¡ exibido.
         site_url = str(config.get('rodape_site', '')).strip()
         if site_url:
             card_qr = criar_card_qrcode_estilizado(site_url, cor_rodape_bg, tam_qr=110)
@@ -411,7 +411,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
 
         validade_str = str(config.get('rodape_validade', '')).strip()
         if validade_str:
-            draw.text(((LARGURA_TOTAL + 150) // 2, y_rodape + 100), f"PreÃ§os vÃ¡lidos no perÃ­odo: {validade_str}", fill="#E0E0E0", font=font_rod_validade, anchor="mm")
+            draw.text(((LARGURA_TOTAL + 150) // 2, y_rodape + 100), f"Preços válidos no período: {validade_str}", fill="#E0E0E0", font=font_rod_validade, anchor="mm")
 
         tabela_str = str(config.get('rodape_tabela', '')).strip()
         if tabela_str:
@@ -426,14 +426,14 @@ if __name__ == "__main__":
     saida_cli = None
     try:
         if len(sys.argv) < 2:
-            raise ValueError("Informe o arquivo CSV como primeiro parÃ¢metro.")
+            raise ValueError("Informe o arquivo CSV como primeiro parÃƒÂ¢metro.")
 
         # O ERP envia: GERAR_CATALOGO.EXE <arquivo.csv> <arquivo.jpg>
         arquivo_csv = normalizar_caminho_argumento(sys.argv[1])
         saida_cli = normalizar_caminho_argumento(sys.argv[2]) if len(sys.argv) >= 3 else None
 
         if not arquivo_csv or not os.path.isfile(arquivo_csv):
-            raise FileNotFoundError(f"Arquivo CSV nÃ£o encontrado: {arquivo_csv or '(vazio)'}")
+            raise FileNotFoundError(f"Arquivo CSV nÃƒÂ£o encontrado: {arquivo_csv or '(vazio)'}")
 
         config = {}
         produtos = []
@@ -464,11 +464,11 @@ if __name__ == "__main__":
                 reader = csv.DictReader(linhas_produtos, delimiter=';')
                 produtos.extend(reader)
 
-        # O segundo parÃ¢metro sempre prevalece sobre saida_jpg do CSV.
+        # O segundo parÃƒÂ¢metro sempre prevalece sobre saida_jpg do CSV.
         renderizar_catalogo(config, produtos, saida_cli)
 
     except Exception:
-        # Salva o erro ao lado do JPG pedido; assim o ERP nÃ£o esconde a causa.
+        # Salva o erro ao lado do JPG pedido; assim o ERP nÃƒÂ£o esconde a causa.
         pasta_log = os.path.dirname(saida_cli) if saida_cli else os.path.dirname(arquivo_csv or '')
         if not pasta_log or not os.path.isdir(pasta_log):
             pasta_log = os.getcwd()
