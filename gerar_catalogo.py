@@ -281,7 +281,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
 
                 cod_str = str(prod.get('codigo', '')).zfill(5)
                 marca_str = str(prod.get('marca', '')).upper()
-                draw.text((x + larg_card_dest_padrao - 15, y_cursor + 27), f"CÃ³digo: {cod_str}", fill="#555555", font=font_cod_bold, anchor="rm")
+                draw.text((x + larg_card_dest_padrao - 15, y_cursor + 27), f"Código: {cod_str}", fill="#555555", font=font_cod_bold, anchor="rm")
 
                 area_foto_x, area_foto_y = x + 15, y_cursor + 50
                 area_foto_w, area_foto_h = larg_card_dest_padrao - 30, 320
