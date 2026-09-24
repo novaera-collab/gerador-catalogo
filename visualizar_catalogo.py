@@ -548,7 +548,11 @@ class AppVisualizador:
             cy = h_canv // 2 if h_canv > 50 else 350
             self.canvas.create_text(
                 cx, cy,
-                text=f"Aguardando o encarte informado\n{self.jpg_path}\n\nPressione F5 para atualizar.",
+                text=(
+                    f"Aguardando o encarte informado\n{self.jpg_path}\n\nPressione F5 para atualizar."
+                    if self.jpg_path
+                    else "Nenhuma imagem aberta.\n\nClique em Abrir arquivo para selecionar uma imagem."
+                ),
                 fill=t["texto_suave"], font=("Segoe UI", 12), justify="center"
             )
             self.lbl_paginacao.config(text="P\u00e1gina 0 a 0")
@@ -657,7 +661,10 @@ class AppVisualizador:
 
     def abrir_pasta(self):
         caminho_target = self.lista_paginas[self.indice_atual] if self.lista_paginas else self.jpg_path
-        pasta = caminho_target if os.path.isdir(caminho_target) else os.path.dirname(caminho_target)
+        if caminho_target:
+            pasta = caminho_target if os.path.isdir(caminho_target) else os.path.dirname(caminho_target)
+        else:
+            pasta = os.getcwd()
         if pasta and os.path.isdir(pasta):
             try:
                 os.startfile(os.path.abspath(pasta))
@@ -682,13 +689,8 @@ if __name__ == "__main__":
         pasta_param = os.getcwd()
         arquivo_jpg = localizar_arquivo_encarte(pasta_param)
 
-    if not arquivo_jpg:
-        messagebox.showerror(
-            "Encarte nÃ£o encontrado",
-            "Nenhuma imagem JPG, JPEG, PNG ou BMP com a palavra 'encarte' no nome foi encontrada na pasta informada."
-        )
-        sys.exit(1)
-
+    # Sem parÃ¢metros ou sem um encarte localizado, abre o visualizador vazio.
+    # O usuÃ¡rio poderÃ¡ escolher livremente uma imagem em "Abrir arquivo".
     root = tk.Tk()
     app = AppVisualizador(root, pasta_parametros=pasta_param, jpg_path=arquivo_jpg)
     root.mainloop()
