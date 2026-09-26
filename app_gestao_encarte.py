@@ -13,6 +13,7 @@ from tkinter import messagebox, Toplevel, filedialog
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from tkcalendar import DateEntry
+from PIL import Image
 
 if sys.platform.startswith("win"):
     import ctypes
@@ -114,7 +115,10 @@ def carregar_parametros_banco():
         "cor_grid_preco": "",
         "cabecalho_logo": "",
         "cabecalho_site": "",
-        "rodape_logo_fone": ""
+        "rodape_logo_fone": "",
+        "cor_fundo_destaque": "",
+        "cor_fundo_demais": "",
+        "cabecalho_tema": ""
     }
     try:
         conn = get_connection()
@@ -147,34 +151,38 @@ def salvar_parametros_banco(p):
                 cor_grid_preco = %s,
                 cabecalho_logo = %s,
                 cabecalho_site = %s,
-                rodape_logo_fone = %s
+                rodape_logo_fone = %s,
+                cor_fundo_destaque = %s,
+                cor_fundo_demais = %s,
+                cabecalho_tema = %s
             WHERE id = %s
         """
         cur.execute(query, (
             p.get("dir_encarte", ""), p.get("dir_csv", ""), p.get("dir_jpg", ""),
             p.get("cor_tit_rodape", ""), p.get("cor_grid_tarja", ""), p.get("cor_grid_preco", ""),
             p.get("cabecalho_logo", ""), p.get("cabecalho_site", ""), p.get("rodape_logo_fone", ""),
+            p.get("cor_fundo_destaque", ""), p.get("cor_fundo_demais", ""), p.get("cabecalho_tema", ""),
             res["id"]
         ))
     else:
         query = f"""
             INSERT INTO {schema}.encarte_parametros (
                 dir_encarte, dir_csv, dir_jpg, cor_tit_rodape, cor_grid_tarja,
-                cor_grid_preco, cabecalho_logo, cabecalho_site, rodape_logo_fone
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                cor_grid_preco, cabecalho_logo, cabecalho_site, rodape_logo_fone,
+                cor_fundo_destaque, cor_fundo_demais, cabecalho_tema
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         cur.execute(query, (
             p.get("dir_encarte", ""), p.get("dir_csv", ""), p.get("dir_jpg", ""),
             p.get("cor_tit_rodape", ""), p.get("cor_grid_tarja", ""), p.get("cor_grid_preco", ""),
-            p.get("cabecalho_logo", ""), p.get("cabecalho_site", ""), p.get("rodape_logo_fone", "")
+            p.get("cabecalho_logo", ""), p.get("cabecalho_site", ""), p.get("rodape_logo_fone", ""),
+            p.get("cor_fundo_destaque", ""), p.get("cor_fundo_demais", ""), p.get("cabecalho_tema", "")
         ))
     conn.commit()
     conn.close()
 
 def centralizar_no_topo_da_principal(modal, largura, altura):
-    """Posiciona a janela modal centralizada horizontalmente no topo da janela principal, garantindo foco modal e respeitando o limite vertical da tela."""
     modal.update_idletasks()
-    
     root = modal.winfo_toplevel()
     while root.master:
         root = root.master.winfo_toplevel()
@@ -201,7 +209,6 @@ class NovoContatoModal(ctk.CTkToplevel):
         self.contato_edicao_id = None
         self.title("Gerenciar Contatos")
 
-        # Form de Inclusão / Edição
         frame_form = ctk.CTkFrame(self)
         frame_form.pack(fill="x", padx=15, pady=10)
 
@@ -218,7 +225,6 @@ class NovoContatoModal(ctk.CTkToplevel):
 
         self.btn_cancelar_edit = ctk.CTkButton(frame_form, text="Cancelar Edição", fg_color="#455A64", hover_color="#37474F", width=110, command=self.limpar_formulario)
 
-        # Lista de Contatos com Botões de Ação
         ctk.CTkLabel(self, text="Contatos Cadastrados:", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=15, pady=(5, 2))
         
         self.frame_lista = ctk.CTkScrollableFrame(self, height=200)
@@ -547,14 +553,15 @@ class ParametrosWindow(ctk.CTkToplevel):
         )
         btn_criar_tabelas.grid(row=6, column=0, columnspan=2, pady=20, padx=10, sticky="ew")
 
+        # Rótulos atualizados no formulário de Diretórios e Design
         self.txt_dir_encarte = self._criar_campo_caminho(tab_dirs, "Diretório Executáveis:", 0, params_db.get("dir_encarte", ""), pasta=True)
         self.txt_dir_csv = self._criar_campo_caminho(tab_dirs, "Diretório CSV:", 1, params_db.get("dir_csv", ""), pasta=True)
-        self.txt_dir_jpg = self._criar_campo_caminho(tab_dirs, "Diretório JPG:", 2, params_db.get("dir_jpg", ""), pasta=True)
+        self.txt_dir_jpg = self._criar_campo_caminho(tab_dirs, "Diretório Salva JPG:", 2, params_db.get("dir_jpg", ""), pasta=True)
         
         self.txt_cabecalho_logo = self._criar_campo_caminho(tab_dirs, "Cabeçalho Logo:", 3, params_db.get("cabecalho_logo", ""), pasta=False)
         self.txt_rodape_logo_fone = self._criar_campo_caminho(tab_dirs, "Rodapé Logo Fone:", 4, params_db.get("rodape_logo_fone", ""), pasta=False)
 
-        ctk.CTkLabel(tab_dirs, text="Cabeçalho Site:").grid(row=5, column=0, padx=10, pady=6, sticky="w")
+        ctk.CTkLabel(tab_dirs, text="Rodapé Site:").grid(row=5, column=0, padx=10, pady=6, sticky="w")
         self.txt_cabecalho_site = ctk.CTkEntry(tab_dirs, width=280)
         self.txt_cabecalho_site.insert(0, params_db.get("cabecalho_site", ""))
         self.txt_cabecalho_site.grid(row=5, column=1, padx=5, pady=6)
@@ -574,10 +581,23 @@ class ParametrosWindow(ctk.CTkToplevel):
         self.txt_cor_grid_preco.insert(0, params_db.get("cor_grid_preco", ""))
         self.txt_cor_grid_preco.grid(row=8, column=1, padx=5, pady=6)
 
+        # Novos campos adicionados
+        ctk.CTkLabel(tab_dirs, text="Cor Fundo Destaque:").grid(row=9, column=0, padx=10, pady=6, sticky="w")
+        self.txt_cor_fundo_destaque = ctk.CTkEntry(tab_dirs, width=280)
+        self.txt_cor_fundo_destaque.insert(0, params_db.get("cor_fundo_destaque", ""))
+        self.txt_cor_fundo_destaque.grid(row=9, column=1, padx=5, pady=6)
+
+        ctk.CTkLabel(tab_dirs, text="Cor Fundo Demais:").grid(row=10, column=0, padx=10, pady=6, sticky="w")
+        self.txt_cor_fundo_demais = ctk.CTkEntry(tab_dirs, width=280)
+        self.txt_cor_fundo_demais.insert(0, params_db.get("cor_fundo_demais", ""))
+        self.txt_cor_fundo_demais.grid(row=10, column=1, padx=5, pady=6)
+
+        self.txt_cabecalho_tema = self._criar_campo_caminho(tab_dirs, "Tema do Cabeçalho:", 11, params_db.get("cabecalho_tema", ""), pasta=False)
+
         btn_salvar = ctk.CTkButton(self, text="💾 Salvar Parâmetros", fg_color="#2E7D32", hover_color="#1B5E20", font=ctk.CTkFont(weight="bold"), height=38, command=self.salvar)
         btn_salvar.pack(pady=(0, 15))
 
-        centralizar_no_topo_da_principal(self, 680, 520)
+        centralizar_no_topo_da_principal(self, 680, 580)
 
     def _criar_campo_caminho(self, parent, label_text, row, valor_inicial, pasta=True):
         ctk.CTkLabel(parent, text=label_text).grid(row=row, column=0, padx=10, pady=6, sticky="w")
@@ -598,7 +618,7 @@ class ParametrosWindow(ctk.CTkToplevel):
         else:
             caminho = filedialog.askopenfilename(
                 parent=self,
-                title="Selecione a Imagem", 
+                title="Selecione o Arquivo", 
                 filetypes=[("Imagens", "*.png *.jpg *.jpeg *.bmp"), ("Todos os Arquivos", "*.*")]
             )
         
@@ -625,6 +645,7 @@ class ParametrosWindow(ctk.CTkToplevel):
             data_inicio date NOT NULL,
             data_fim date NOT NULL,
             status character varying(20) COLLATE pg_catalog."default" DEFAULT 'ATIVO'::character varying,
+            encarte_tema character varying(255),
             criado_em timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
             CONSTRAINT encarte_pkey PRIMARY KEY (id)
         );
@@ -637,6 +658,8 @@ class ParametrosWindow(ctk.CTkToplevel):
             preco_oferta numeric(12,2) NOT NULL,
             qtde_oferta numeric(12,2) NOT NULL,
             ordem integer DEFAULT 0,
+            destaque character(1) DEFAULT 'N',
+            item_foto character varying(255),
             CONSTRAINT encarte_item_pkey PRIMARY KEY (id)
         );
 
@@ -659,8 +682,18 @@ class ParametrosWindow(ctk.CTkToplevel):
             cabecalho_logo character varying(255),
             cabecalho_site character varying(255),
             rodape_logo_fone character varying(255),
+            cor_fundo_destaque character varying(50),
+            cor_fundo_demais character varying(50),
+            cabecalho_tema character varying(255),
             CONSTRAINT encarte_parametros_pkey PRIMARY KEY (id)
         );
+
+        ALTER TABLE {schema}.encarte ADD COLUMN IF NOT EXISTS encarte_tema character varying(255);
+        ALTER TABLE {schema}.encarte_item ADD COLUMN IF NOT EXISTS destaque character(1) DEFAULT 'N';
+        ALTER TABLE {schema}.encarte_item ADD COLUMN IF NOT EXISTS item_foto character varying(255);
+        ALTER TABLE {schema}.encarte_parametros ADD COLUMN IF NOT EXISTS cor_fundo_destaque character varying(50);
+        ALTER TABLE {schema}.encarte_parametros ADD COLUMN IF NOT EXISTS cor_fundo_demais character varying(50);
+        ALTER TABLE {schema}.encarte_parametros ADD COLUMN IF NOT EXISTS cabecalho_tema character varying(255);
         """
         try:
             conn = get_connection()
@@ -695,7 +728,10 @@ class ParametrosWindow(ctk.CTkToplevel):
             "cabecalho_site": self.txt_cabecalho_site.get().strip(),
             "cor_tit_rodape": self.txt_cor_tit_rodape.get().strip(),
             "cor_grid_tarja": self.txt_cor_grid_tarja.get().strip(),
-            "cor_grid_preco": self.txt_cor_grid_preco.get().strip()
+            "cor_grid_preco": self.txt_cor_grid_preco.get().strip(),
+            "cor_fundo_destaque": self.txt_cor_fundo_destaque.get().strip(),
+            "cor_fundo_demais": self.txt_cor_fundo_demais.get().strip(),
+            "cabecalho_tema": self.txt_cabecalho_tema.get().strip()
         }
         
         try:
@@ -794,7 +830,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
         if self.encarte_id:
             self.carregar_dados()
 
-        centralizar_no_topo_da_principal(self, 960, 520)
+        centralizar_no_topo_da_principal(self, 980, 560)
 
     def criar_widgets(self):
         frame_top_bar = ctk.CTkFrame(self, fg_color="transparent")
@@ -810,8 +846,14 @@ class FormEncarteWindow(ctk.CTkToplevel):
         frame_head.pack(fill="x", padx=15, pady=5)
 
         ctk.CTkLabel(frame_head, text="Título:").grid(row=0, column=0, padx=8, pady=6, sticky="w")
-        self.txt_titulo = ctk.CTkEntry(frame_head, width=450, placeholder_text="Ex: ENCARTE FARMAX")
+        self.txt_titulo = ctk.CTkEntry(frame_head, width=420, placeholder_text="Ex: ENCARTE FARMAX")
         self.txt_titulo.grid(row=0, column=1, columnspan=3, padx=8, pady=6, sticky="w")
+
+        ctk.CTkLabel(frame_head, text="Tema do Encarte:").grid(row=0, column=4, padx=8, pady=6, sticky="w")
+        self.txt_encarte_tema = ctk.CTkEntry(frame_head, width=220, placeholder_text="Caminho do Tema...")
+        self.txt_encarte_tema.grid(row=0, column=5, padx=(8,2), pady=6, sticky="w")
+        btn_busca_tema = ctk.CTkButton(frame_head, text="🔍", width=36, height=28, command=self.buscar_tema_encarte)
+        btn_busca_tema.grid(row=0, column=6, padx=(2,8), pady=6, sticky="w")
 
         ctk.CTkLabel(frame_head, text="Data Início:").grid(row=1, column=0, padx=8, pady=6, sticky="w")
         self.txt_dt_ini = ctk.CTkEntry(frame_head, width=120, placeholder_text="29/08/2026")
@@ -829,26 +871,33 @@ class FormEncarteWindow(ctk.CTkToplevel):
         frame_prod.pack(fill="x", padx=15, pady=5)
 
         ctk.CTkLabel(frame_prod, text="Cód. Prod:").grid(row=0, column=0, padx=4, pady=6)
-        
-        self.txt_p_cod = ctk.CTkEntry(frame_prod, width=80, placeholder_text="00001")
+        self.txt_p_cod = ctk.CTkEntry(frame_prod, width=75, placeholder_text="00001")
         self.txt_p_cod.grid(row=0, column=1, padx=(4, 2), pady=6)
         self.txt_p_cod.bind("<FocusOut>", self.formatar_codigo_evento)
 
-        btn_lupa = ctk.CTkButton(frame_prod, text="🔍", width=38, height=28, fg_color="#1976D2", hover_color="#0D47A1", command=self.abrir_lupa)
-        btn_lupa.grid(row=0, column=2, padx=(0, 8), pady=6)
+        btn_lupa = ctk.CTkButton(frame_prod, text="🔍", width=36, height=28, fg_color="#1976D2", hover_color="#0D47A1", command=self.abrir_lupa)
+        btn_lupa.grid(row=0, column=2, padx=(0, 6), pady=6)
 
         ctk.CTkLabel(frame_prod, text="A partir de:").grid(row=0, column=3, padx=2, pady=6)
-        self.txt_p_qtde = ctk.CTkEntry(frame_prod, width=65, placeholder_text="1.00")
+        self.txt_p_qtde = ctk.CTkEntry(frame_prod, width=55, placeholder_text="1.00")
         self.txt_p_qtde.insert(0, "1")
         self.txt_p_qtde.grid(row=0, column=4, padx=(2, 2), pady=6)
-        ctk.CTkLabel(frame_prod, text="unid.", text_color=("gray30", "gray70")).grid(row=0, column=5, padx=(0, 8), pady=6)
 
-        ctk.CTkLabel(frame_prod, text="Valor Oferta (R$):").grid(row=0, column=6, padx=2, pady=6)
-        self.txt_p_preco = ctk.CTkEntry(frame_prod, width=95, placeholder_text="0.00")
-        self.txt_p_preco.grid(row=0, column=7, padx=4, pady=6)
+        ctk.CTkLabel(frame_prod, text="Preço (R$):").grid(row=0, column=5, padx=2, pady=6)
+        self.txt_p_preco = ctk.CTkEntry(frame_prod, width=80, placeholder_text="0.00")
+        self.txt_p_preco.grid(row=0, column=6, padx=4, pady=6)
 
-        btn_add = ctk.CTkButton(frame_prod, text="➕ Adicionar", width=110, height=30, fg_color="#2E7D32", hover_color="#1B5E20", command=self.adicionar_item)
-        btn_add.grid(row=0, column=8, padx=8, pady=6)
+        self.chk_destaque = ctk.CTkCheckBox(frame_prod, text="Destaque")
+        self.chk_destaque.grid(row=0, column=7, padx=6, pady=6)
+
+        ctk.CTkLabel(frame_prod, text="Foto:").grid(row=0, column=8, padx=2, pady=6)
+        self.txt_p_foto = ctk.CTkEntry(frame_prod, width=120, placeholder_text="Caminho foto...")
+        self.txt_p_foto.grid(row=0, column=9, padx=2, pady=6)
+        btn_foto = ctk.CTkButton(frame_prod, text="📷", width=36, height=28, command=self.buscar_foto_item)
+        btn_foto.grid(row=0, column=10, padx=(2, 6), pady=6)
+
+        btn_add = ctk.CTkButton(frame_prod, text="➕ Adicionar", width=100, height=30, fg_color="#2E7D32", hover_color="#1B5E20", command=self.adicionar_item)
+        btn_add.grid(row=0, column=11, padx=6, pady=6)
 
         self.frame_lista = ctk.CTkScrollableFrame(self)
         self.frame_lista.pack(fill="both", expand=True, padx=15, pady=5)
@@ -861,6 +910,35 @@ class FormEncarteWindow(ctk.CTkToplevel):
 
         btn_cancelar = ctk.CTkButton(frame_botoes, text="❌ Cancelar", fg_color="#C62828", hover_color="#B71C1C", height=32, width=110, command=self.destroy)
         btn_cancelar.pack(side="right", padx=5)
+
+    def buscar_tema_encarte(self):
+        params = carregar_parametros_banco()
+        dir_inicial = resolver_caminho(params.get("cabecalho_tema", ""))
+        if not dir_inicial or not os.path.exists(dir_inicial):
+            dir_inicial = os.getcwd()
+            
+        if os.path.isfile(dir_inicial):
+            dir_inicial = os.path.dirname(dir_inicial)
+
+        caminho = filedialog.askopenfilename(
+            parent=self,
+            initialdir=dir_inicial,
+            title="Selecione o Tema do Encarte",
+            filetypes=[("Imagens", "*.png *.jpg *.jpeg *.bmp"), ("Todos os Arquivos", "*.*")]
+        )
+        if caminho:
+            self.txt_encarte_tema.delete(0, 'end')
+            self.txt_encarte_tema.insert(0, caminho.replace("/", "\\"))
+
+    def buscar_foto_item(self):
+        caminho = filedialog.askopenfilename(
+            parent=self,
+            title="Selecione a Foto do Produto",
+            filetypes=[("Imagens", "*.png *.jpg *.jpeg *.bmp"), ("Todos os Arquivos", "*.*")]
+        )
+        if caminho:
+            self.txt_p_foto.delete(0, 'end')
+            self.txt_p_foto.insert(0, caminho.replace("/", "\\"))
 
     def formatar_codigo_5_digitos(self, valor):
         valor_limpo = str(valor).strip()
@@ -902,6 +980,8 @@ class FormEncarteWindow(ctk.CTkToplevel):
         cod_raw = self.txt_p_cod.get().strip()
         qtde_raw = self.txt_p_qtde.get().strip().replace(',', '.')
         preco_raw = self.txt_p_preco.get().strip().replace(',', '.')
+        is_destaque = 'S' if self.chk_destaque.get() == 1 else 'N'
+        foto_path = self.txt_p_foto.get().strip()
 
         if not cod_raw:
             messagebox.showwarning("Atenção", "Informe o Código do Produto.", parent=self)
@@ -909,6 +989,12 @@ class FormEncarteWindow(ctk.CTkToplevel):
             return
 
         cod_formatted = self.formatar_codigo_5_digitos(cod_raw)
+
+        if is_destaque == 'S':
+            total_destaques = sum(1 for item in self.itens if item.get('destaque') == 'S')
+            if total_destaques >= 3:
+                messagebox.showwarning("Limite Atingido", "Você pode marcar no máximo 3 itens como destaque por encarte.", parent=self)
+                return
 
         try:
             qtde_val = float(qtde_raw) if qtde_raw else 1.0
@@ -943,7 +1029,9 @@ class FormEncarteWindow(ctk.CTkToplevel):
         self.itens.insert(0, {
             'codigo_prod': cod_formatted, 
             'qtde_oferta': qtde_val, 
-            'preco_oferta': preco_val
+            'preco_oferta': preco_val,
+            'destaque': is_destaque,
+            'item_foto': foto_path
         })
         self.atualizar_grid()
 
@@ -951,6 +1039,8 @@ class FormEncarteWindow(ctk.CTkToplevel):
         self.txt_p_qtde.delete(0, 'end')
         self.txt_p_qtde.insert(0, "1")
         self.txt_p_preco.delete(0, 'end')
+        self.txt_p_foto.delete(0, 'end')
+        self.chk_destaque.deselect()
         self.txt_p_cod.focus()
 
     def editar_item(self, index):
@@ -963,6 +1053,15 @@ class FormEncarteWindow(ctk.CTkToplevel):
 
         self.txt_p_preco.delete(0, 'end')
         self.txt_p_preco.insert(0, f"{item['preco_oferta']:.2f}")
+
+        self.txt_p_foto.delete(0, 'end')
+        if item.get('item_foto'):
+            self.txt_p_foto.insert(0, item['item_foto'])
+
+        if item.get('destaque') == 'S':
+            self.chk_destaque.select()
+        else:
+            self.chk_destaque.deselect()
         
         self.atualizar_grid()
 
@@ -976,15 +1075,20 @@ class FormEncarteWindow(ctk.CTkToplevel):
             f_row.pack(fill="x", pady=2, padx=5)
 
             num_exibicao = total_itens - idx
-            ctk.CTkLabel(f_row, text=f"#{num_exibicao}", width=40).pack(side="left", padx=5)
-            ctk.CTkLabel(f_row, text=f"Código: {item['codigo_prod']}", width=140, anchor="w", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=5)
+            ctk.CTkLabel(f_row, text=f"#{num_exibicao}", width=35).pack(side="left", padx=5)
+            
+            lbl_destaque = "⭐ [DESTAQUE]" if item.get('destaque') == 'S' else ""
+            ctk.CTkLabel(f_row, text=f"Código: {item['codigo_prod']} {lbl_destaque}", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#FF8F00", "#FFD54F") if item.get('destaque') == 'S' else ("#000000", "#FFFFFF")).pack(side="left", padx=5)
             
             qtde_str = f"{item['qtde_oferta']:.2f}".rstrip('0').rstrip('.')
-            ctk.CTkLabel(f_row, text=f"A partir de {qtde_str} un.", width=140, anchor="w", text_color=("#000000", "#81D4FA")).pack(side="left", padx=5)
+            ctk.CTkLabel(f_row, text=f"A partir de {qtde_str} un.", width=120, anchor="w", text_color=("#000000", "#81D4FA")).pack(side="left", padx=5)
 
             cor_preco = ("#2E7D32", "#A5D6A7") if item['preco_oferta'] > 0 else ("#E65100", "#FFB74D")
-            lbl_preco = f"R$ {item['preco_oferta']:.2f}" if item['preco_oferta'] > 0 else "Preço Atual (R$ 0.00)"
-            ctk.CTkLabel(f_row, text=lbl_preco, width=160, text_color=cor_preco, font=ctk.CTkFont(weight="bold")).pack(side="left", padx=5)
+            lbl_preco = f"R$ {item['preco_oferta']:.2f}" if item['preco_oferta'] > 0 else "Preço Atual"
+            ctk.CTkLabel(f_row, text=lbl_preco, width=120, text_color=cor_preco, font=ctk.CTkFont(weight="bold")).pack(side="left", padx=5)
+
+            foto_text = f"📷 {os.path.basename(item['item_foto'])}" if item.get('item_foto') else "Sem foto ind."
+            ctk.CTkLabel(f_row, text=foto_text, width=120, text_color="gray", anchor="w").pack(side="left", padx=5)
 
             btn_del = ctk.CTkButton(f_row, text="❌", width=36, height=28, fg_color="#C62828", hover_color="#B71C1C", command=lambda i=idx: self.remover_item(i))
             btn_del.pack(side="right", padx=3)
@@ -1020,13 +1124,17 @@ class FormEncarteWindow(ctk.CTkToplevel):
                 self.txt_titulo.insert(0, enc['titulo'])
                 self.txt_dt_ini.insert(0, self.converter_data_para_br(enc['data_inicio']))
                 self.txt_dt_fim.insert(0, self.converter_data_para_br(enc['data_fim']))
+                if enc.get('encarte_tema'):
+                    self.txt_encarte_tema.insert(0, enc['encarte_tema'])
 
-                cur.execute(f"SELECT codigo_prod, qtde_oferta, preco_oferta FROM {schema}.encarte_item WHERE encarte_id = %s ORDER BY ordem DESC, id DESC", (self.encarte_id,))
+                cur.execute(f"SELECT codigo_prod, qtde_oferta, preco_oferta, destaque, item_foto FROM {schema}.encarte_item WHERE encarte_id = %s ORDER BY ordem DESC, id DESC", (self.encarte_id,))
                 itens_bd = cur.fetchall()
                 self.itens = [{
                     'codigo_prod': self.formatar_codigo_5_digitos(str(i['codigo_prod'])), 
                     'qtde_oferta': float(i.get('qtde_oferta', 1.0)),
-                    'preco_oferta': float(i['preco_oferta'])
+                    'preco_oferta': float(i['preco_oferta']),
+                    'destaque': i.get('destaque', 'N') or 'N',
+                    'item_foto': i.get('item_foto', '') or ''
                 } for i in itens_bd]
                 self.atualizar_grid()
 
@@ -1039,6 +1147,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
         titulo = self.txt_titulo.get().strip()
         dt_ini_raw = self.txt_dt_ini.get().strip()
         dt_fim_raw = self.txt_dt_fim.get().strip()
+        encarte_tema = self.txt_encarte_tema.get().strip()
 
         if not titulo or not dt_ini_raw or not dt_fim_raw or not self.itens:
             messagebox.showwarning("Atenção", "Preencha o cabeçalho e insira ao menos 1 produto.", parent=self)
@@ -1062,31 +1171,31 @@ class FormEncarteWindow(ctk.CTkToplevel):
                 
                 if not existe:
                     cur.execute(f"""
-                        INSERT INTO {schema}.encarte (titulo, data_inicio, data_fim) 
-                        VALUES (%s, %s, %s) RETURNING id
-                    """, (titulo, dt_ini_iso, dt_fim_iso))
+                        INSERT INTO {schema}.encarte (titulo, data_inicio, data_fim, encarte_tema) 
+                        VALUES (%s, %s, %s, %s) RETURNING id
+                    """, (titulo, dt_ini_iso, dt_fim_iso, encarte_tema))
                     enc_id = cur.fetchone()['id']
                 else:
                     cur.execute(f"""
                         UPDATE {schema}.encarte 
-                        SET titulo=%s, data_inicio=%s, data_fim=%s 
+                        SET titulo=%s, data_inicio=%s, data_fim=%s, encarte_tema=%s 
                         WHERE id=%s
-                    """, (titulo, dt_ini_iso, dt_fim_iso, self.encarte_id))
+                    """, (titulo, dt_ini_iso, dt_fim_iso, encarte_tema, self.encarte_id))
                     
                     cur.execute(f"DELETE FROM {schema}.encarte_item WHERE encarte_id=%s", (self.encarte_id,))
                     enc_id = self.encarte_id
             else:
                 cur.execute(f"""
-                    INSERT INTO {schema}.encarte (titulo, data_inicio, data_fim) 
-                    VALUES (%s, %s, %s) RETURNING id
-                """, (titulo, dt_ini_iso, dt_fim_iso))
+                    INSERT INTO {schema}.encarte (titulo, data_inicio, data_fim, encarte_tema) 
+                    VALUES (%s, %s, %s, %s) RETURNING id
+                """, (titulo, dt_ini_iso, dt_fim_iso, encarte_tema))
                 enc_id = cur.fetchone()['id']
 
             for idx, item in enumerate(reversed(self.itens)):
                 cur.execute(f"""
-                    INSERT INTO {schema}.encarte_item (encarte_id, codigo_prod, qtde_oferta, preco_oferta, ordem) 
-                    VALUES (%s, %s, %s, %s, %s)
-                """, (enc_id, item['codigo_prod'], item['qtde_oferta'], item['preco_oferta'], idx))
+                    INSERT INTO {schema}.encarte_item (encarte_id, codigo_prod, qtde_oferta, preco_oferta, ordem, destaque, item_foto) 
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (enc_id, item['codigo_prod'], item['qtde_oferta'], item['preco_oferta'], idx, item.get('destaque', 'N'), item.get('item_foto', '')))
 
             conn.commit()
             conn.close()
@@ -1113,8 +1222,10 @@ class AppPrincipal(ctk.CTk):
         frame_topo = ctk.CTkFrame(self)
         frame_topo.pack(fill="x", padx=15, pady=(10, 5))
 
-        ctk.CTkLabel(frame_topo, text="📋 Encartes Cadastrados", font=ctk.CTkFont(size=18, weight="bold")).pack(side="left", padx=15, pady=8)
-        
+        # Container para a Logo / Título no topo
+        self.lbl_logo = ctk.CTkLabel(frame_topo, text="")
+        self.lbl_logo.pack(side="left", padx=15, pady=8)
+
         btn_sair = ctk.CTkButton(frame_topo, text="🚪 Sair", fg_color="#C62828", hover_color="#B71C1C", width=90, height=32, command=self.destroy)
         btn_sair.pack(side="right", padx=6, pady=8)
 
@@ -1138,7 +1249,28 @@ class AppPrincipal(ctk.CTk):
         self.frame_lista = ctk.CTkScrollableFrame(self)
         self.frame_lista.pack(fill="both", expand=True, padx=15, pady=5)
 
+        self.atualizar_logo_topo()
         self.carregar_encartes()
+
+    def atualizar_logo_topo(self):
+        modo_atual = ctk.get_appearance_mode()
+        
+        if modo_atual.lower() == "dark":
+            nome_img = "logo-ze2.jpg"
+        else:
+            nome_img = "logo-ze.jpg"
+
+        caminho_img = os.path.join("encarte_imagens", nome_img)
+
+        if os.path.exists(caminho_img):
+            try:
+                pil_img = Image.open(caminho_img)
+                ctk_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(180, 45))
+                self.lbl_logo.configure(image=ctk_img, text="")
+            except Exception:
+                self.lbl_logo.configure(image="", text="📋 Gestão de Encartes", font=ctk.CTkFont(size=18, weight="bold"))
+        else:
+            self.lbl_logo.configure(image="", text="📋 Gestão de Encartes", font=ctk.CTkFont(size=18, weight="bold"))
 
     def alternar_tema(self):
         modo_atual = ctk.get_appearance_mode()
@@ -1146,6 +1278,7 @@ class AppPrincipal(ctk.CTk):
             ctk.set_appearance_mode("Light")
         else:
             ctk.set_appearance_mode("Dark")
+        self.atualizar_logo_topo()
 
     def abrir_parametros(self):
         ParametrosWindow(self)
