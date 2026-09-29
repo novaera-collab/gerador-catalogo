@@ -205,6 +205,31 @@ def centralizar_no_topo_da_principal(modal, largura, altura):
     modal.grab_set()
     modal.focus_force()
 
+def obter_descricao_produto(codigo):
+    """Consulta a descrição do produto na tabela esprod."""
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        query = """
+            SELECT 
+                CASE 
+                    WHEN COALESCE(fcomplemen, '') <> '' THEN fcomplemen 
+                    ELSE fdescricao 
+                END AS nome_exibicao
+            FROM esprod 
+            WHERE CAST(fco AS TEXT) = %s OR fco = %s
+            LIMIT 1
+        """
+        cod_clean = str(codigo).lstrip('0')
+        cur.execute(query, (str(codigo), int(cod_clean) if cod_clean.isdigit() else 0))
+        res = cur.fetchone()
+        conn.close()
+        if res and res.get('nome_exibicao'):
+            return res['nome_exibicao']
+    except Exception:
+        pass
+    return ""
+
 class NovoContatoModal(ctk.CTkToplevel):
     def __init__(self, parent, callback_sucesso):
         super().__init__(parent)
@@ -1037,8 +1062,11 @@ class FormEncarteWindow(ctk.CTkToplevel):
                 self.txt_p_preco.focus()
                 return
 
+        desc_prod = obter_descricao_produto(cod_formatted)
+
         self.itens.insert(0, {
             'codigo_prod': cod_formatted, 
+            'descricao_prod': desc_prod,
             'qtde_oferta': qtde_val, 
             'preco_oferta': preco_val,
             'destaque': is_destaque,
@@ -1088,10 +1116,17 @@ class FormEncarteWindow(ctk.CTkToplevel):
             num_exibicao = total_itens - idx
             ctk.CTkLabel(f_row, text=f"#{num_exibicao}", width=35).pack(side="left", padx=5)
             
-            # Código fixo em 110px de largura
-            ctk.CTkLabel(f_row, text=f"Código: {item['codigo_prod']}", width=110, anchor="w", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=2)
+            # Container vertical para o Código e a Descrição do produto abaixo dele
+            frame_cod_desc = ctk.CTkFrame(f_row, fg_color="transparent")
+            frame_cod_desc.pack(side="left", padx=2, fill="y")
+
+            ctk.CTkLabel(frame_cod_desc, text=f"Código: {item['codigo_prod']}", anchor="w", font=ctk.CTkFont(weight="bold")).pack(anchor="w")
             
-            # Coluna dedicada para a tag de Destaque para não esticar a largura das outras colunas
+            desc_texto = item.get('descricao_prod') or ''
+            if desc_texto:
+                ctk.CTkLabel(frame_cod_desc, text=desc_texto, anchor="w", font=ctk.CTkFont(size=11), text_color="gray").pack(anchor="w")
+            
+            # Coluna dedicada para a tag de Destaque
             txt_destaque = "⭐ [DESTAQUE]" if item.get('destaque') == 'S' else ""
             ctk.CTkLabel(f_row, text=txt_destaque, width=105, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#FF8F00", "#FFD54F")).pack(side="left", padx=2)
 
@@ -1144,13 +1179,19 @@ class FormEncarteWindow(ctk.CTkToplevel):
 
                 cur.execute(f"SELECT codigo_prod, qtde_oferta, preco_oferta, destaque, item_foto FROM {schema}.encarte_item WHERE encarte_id = %s ORDER BY ordem DESC, id DESC", (self.encarte_id,))
                 itens_bd = cur.fetchall()
-                self.itens = [{
-                    'codigo_prod': self.formatar_codigo_5_digitos(str(i['codigo_prod'])), 
-                    'qtde_oferta': float(i.get('qtde_oferta', 1.0)),
-                    'preco_oferta': float(i['preco_oferta']),
-                    'destaque': i.get('destaque', 'N') or 'N',
-                    'item_foto': i.get('item_foto', '') or ''
-                } for i in itens_bd]
+                
+                self.itens = []
+                for i in itens_bd:
+                    cod_fmt = self.formatar_codigo_5_digitos(str(i['codigo_prod']))
+                    desc = obter_descricao_produto(cod_fmt)
+                    self.itens.append({
+                        'codigo_prod': cod_fmt, 
+                        'descricao_prod': desc,
+                        'qtde_oferta': float(i.get('qtde_oferta', 1.0)),
+                        'preco_oferta': float(i['preco_oferta']),
+                        'destaque': i.get('destaque', 'N') or 'N',
+                        'item_foto': i.get('item_foto', '') or ''
+                    })
                 self.atualizar_grid()
 
             conn.close()
