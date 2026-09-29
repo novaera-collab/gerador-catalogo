@@ -206,11 +206,12 @@ def centralizar_no_topo_da_principal(modal, largura, altura):
     modal.focus_force()
 
 def obter_descricao_produto(codigo):
-    """Consulta a descrição do produto na tabela esprod."""
+    """Consulta a descrição do produto na tabela esprod considerando o schema do banco."""
+   
     try:
         conn = get_connection()
         cur = conn.cursor()
-        query = """
+        query = f"""
             SELECT 
                 CASE 
                     WHEN COALESCE(fcomplemen, '') <> '' THEN fcomplemen 
@@ -219,14 +220,15 @@ def obter_descricao_produto(codigo):
             FROM esprod 
             WHERE CAST(fco AS TEXT) = %s 
                OR CAST(fco AS TEXT) = %s 
-               OR fco = %s
+               OR CAST(fco AS TEXT) = %s
             LIMIT 1
         """
         cod_str = str(codigo).strip()
         cod_clean = cod_str.lstrip('0')
-        cod_int = int(cod_clean) if cod_clean.isdigit() else 0
-        
-        cur.execute(query, (cod_str, cod_clean, cod_int))
+        if not cod_clean:
+            cod_clean = "0"
+            
+        cur.execute(query, (cod_str, cod_clean, cod_str.zfill(5)))
         res = cur.fetchone()
         conn.close()
         if res and res.get('nome_exibicao'):
@@ -812,12 +814,12 @@ class PesquisaProdutoModal(ctk.CTkToplevel):
 
         if not termo:
             return
-
+            
         try:
             conn = get_connection()
             cur = conn.cursor()
 
-            query = """
+            query = f"""
                 SELECT 
                     fco, 
                     CASE 
@@ -864,7 +866,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
         self.encarte_id = encarte_id
         self.callback_refresh = callback_refresh
         self.itens = []
-        self.index_edicao = None  # Guarda o índice do item sendo editado
+        self.index_edicao = None
 
         self.title("Alteração de Encarte" if encarte_id else "Novo Encarte")
 
@@ -935,7 +937,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
         ctk.CTkLabel(frame_prod, text="Foto:").grid(row=0, column=8, padx=2, pady=6, sticky="w")
         self.txt_p_foto = ctk.CTkEntry(frame_prod, width=120, placeholder_text="Caminho foto...")
         self.txt_p_foto.grid(row=0, column=9, padx=2, pady=6)
-        btn_foto = ctk.CTkButton(frame_prod, text="🖼️", width=36, height=28, command=self.buscar_foto_item)
+        btn_foto = ctk.CTkButton(frame_prod, text="🖼️️", width=36, height=28, command=self.buscar_foto_item)
         btn_foto.grid(row=0, column=10, padx=(2, 6), pady=6)
 
         self.btn_add = ctk.CTkButton(frame_prod, text="➕ Adicionar", width=100, height=30, fg_color="#2E7D32", hover_color="#1B5E20", command=self.adicionar_item)
@@ -1132,7 +1134,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
             num_exibicao = total_itens - idx
             ctk.CTkLabel(f_row, text=f"#{num_exibicao}", width=30).pack(side="left", padx=(5, 2))
             
-            # Descrição do Produto na frente do Código (em uma única linha)
+            # Exibe a descrição do Produto pesquisada do Banco
             desc_texto = item.get('descricao_prod') or 'SEM DESCRIÇÃO'
             lbl_desc = ctk.CTkLabel(
                 f_row, 
@@ -1147,7 +1149,6 @@ class FormEncarteWindow(ctk.CTkToplevel):
             lbl_cod = ctk.CTkLabel(f_row, text=f"[Cód: {item['codigo_prod']}]", anchor="w", font=ctk.CTkFont(weight="bold"), text_color="gray")
             lbl_cod.pack(side="left", padx=2)
             
-            # Coluna para a tag de Destaque
             txt_destaque = "⭐ [DESTAQUE]" if item.get('destaque') == 'S' else ""
             ctk.CTkLabel(f_row, text=txt_destaque, width=105, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#FF8F00", "#FFD54F")).pack(side="left", padx=2)
 
