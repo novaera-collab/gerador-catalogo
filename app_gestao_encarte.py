@@ -217,15 +217,20 @@ def obter_descricao_produto(codigo):
                     ELSE fdescricao 
                 END AS nome_exibicao
             FROM esprod 
-            WHERE CAST(fco AS TEXT) = %s OR fco = %s
+            WHERE CAST(fco AS TEXT) = %s 
+               OR CAST(fco AS TEXT) = %s 
+               OR fco = %s
             LIMIT 1
         """
-        cod_clean = str(codigo).lstrip('0')
-        cur.execute(query, (str(codigo), int(cod_clean) if cod_clean.isdigit() else 0))
+        cod_str = str(codigo).strip()
+        cod_clean = cod_str.lstrip('0')
+        cod_int = int(cod_clean) if cod_clean.isdigit() else 0
+        
+        cur.execute(query, (cod_str, cod_clean, cod_int))
         res = cur.fetchone()
         conn.close()
         if res and res.get('nome_exibicao'):
-            return res['nome_exibicao']
+            return res['nome_exibicao'].strip()
     except Exception:
         pass
     return ""
@@ -1127,26 +1132,20 @@ class FormEncarteWindow(ctk.CTkToplevel):
             num_exibicao = total_itens - idx
             ctk.CTkLabel(f_row, text=f"#{num_exibicao}", width=30).pack(side="left", padx=(5, 2))
             
-            # Container do código e descrição logo abaixo
-            frame_cod_desc = ctk.CTkFrame(f_row, fg_color="transparent", width=220)
-            frame_cod_desc.pack(side="left", padx=2, fill="y")
-
-            # Linha 1: Código
-            lbl_cod = ctk.CTkLabel(frame_cod_desc, text=f"Código: {item['codigo_prod']}", anchor="w", font=ctk.CTkFont(weight="bold"))
-            lbl_cod.pack(anchor="w", fill="x")
-            
-            # Linha 2: Descrição do produto abaixo do código
+            # Descrição do Produto na frente do Código (em uma única linha)
             desc_texto = item.get('descricao_prod') or 'SEM DESCRIÇÃO'
             lbl_desc = ctk.CTkLabel(
-                frame_cod_desc, 
+                f_row, 
                 text=desc_texto, 
                 anchor="w", 
-                justify="left",
-                wraplength=210,
-                font=ctk.CTkFont(size=11, weight="bold"), 
+                width=240,
+                font=ctk.CTkFont(size=12, weight="bold"), 
                 text_color=("#333333", "#4CAF50" if item.get('descricao_prod') else "#888888")
             )
-            lbl_desc.pack(anchor="w", fill="x")
+            lbl_desc.pack(side="left", padx=(2, 5))
+
+            lbl_cod = ctk.CTkLabel(f_row, text=f"[Cód: {item['codigo_prod']}]", anchor="w", font=ctk.CTkFont(weight="bold"), text_color="gray")
+            lbl_cod.pack(side="left", padx=2)
             
             # Coluna para a tag de Destaque
             txt_destaque = "⭐ [DESTAQUE]" if item.get('destaque') == 'S' else ""
