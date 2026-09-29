@@ -61,7 +61,6 @@ def gerar_imagem_qrcode(url_completa, tam_px=110):
         except Exception:
             pass
 
-    # API ativa do QR Server (substitui o Google Charts descontinuado)
     try:
         url_encoded = urllib.parse.quote(url_completa)
         api_url = f"https://api.qrserver.com/v1/create-qr-code/?size={tam_px}x{tam_px}&data={url_encoded}&margin=2"
@@ -73,7 +72,6 @@ def gerar_imagem_qrcode(url_completa, tam_px=110):
     except Exception:
         pass
 
-    # Fallback caso esteja sem conexÃƒÆ’Ã‚Â£o
     img_qr = Image.new("RGB", (tam_px, tam_px), (255, 255, 255))
     d_qr = ImageDraw.Draw(img_qr)
     d_qr.rectangle([2, 2, tam_px-3, tam_px-3], outline=(0, 0, 0), width=2)
@@ -86,10 +84,8 @@ def criar_card_qrcode_estilizado(url_site, cor_tema_rgb, tam_qr=110):
         return None
 
     url_completa = url_limpa if url_limpa.startswith(("http://", "https://")) else "https://" + url_limpa
-
     img_qr = gerar_imagem_qrcode(url_completa, tam_px=tam_qr)
 
-    # DimensÃƒÆ’Ã‚Âµes do card ajustadas para nÃƒÆ’Ã‚Â£o cortar texto
     w_card, h_card = tam_qr + 40, tam_qr + 95
     card = Image.new("RGBA", (w_card, h_card), (255, 255, 255, 0))
     draw = ImageDraw.Draw(card)
@@ -137,7 +133,6 @@ def limpar_jpgs_antigos(caminho_saida_base):
         pass
 
 def normalizar_caminho_argumento(valor):
-    """Limpa aspas e normaliza caminhos recebidos pela linha de comando."""
     if valor is None:
         return None
     caminho = str(valor).strip()
@@ -147,6 +142,23 @@ def normalizar_caminho_argumento(valor):
         return None
     return os.path.normpath(os.path.expandvars(os.path.expanduser(caminho)))
 
+def desenhar_precos_tarja(draw, cx, cy, precos, font_single, font_multi, cor_texto):
+    """Auxiliar para desenhar 1, 2 ou 3 preços centralizados dentro da tarja."""
+    precos = [p.strip() for p in precos if p.strip()][:3] # Limita a no máximo 3 preços
+    
+    if not precos:
+        return
+
+    if len(precos) == 1:
+        draw.text((cx, cy), precos[0], fill=cor_texto, font=font_single, anchor="mm")
+    else:
+        qtd = len(precos)
+        # Espaçamento vertical entre cada linha de preço
+        espacamento = 22 if qtd == 3 else 26
+        y_inicio = cy - ((qtd - 1) * espacamento) // 2
+        
+        for i, item in enumerate(precos):
+            draw.text((cx, y_inicio + i * espacamento), item, fill=cor_texto, font=font_multi, anchor="mm")
 
 def renderizar_catalogo(config, produtos, caminho_saida_base):
     prods_destaque = [p for p in produtos if str(p.get('destaque', '')).strip().upper() == 'S']
@@ -176,13 +188,18 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
         font_desc_bold      = ImageFont.truetype("arialbd.ttf", 22)
         font_marca          = ImageFont.truetype("arialbd.ttf", 20)
         font_marca_normal   = ImageFont.truetype("arialbd.ttf", 20)
-        font_preco_destaque = ImageFont.truetype("arialbd.ttf", 50)
+        
+        # Fontes de Preço
+        font_preco_destaque = ImageFont.truetype("arialbd.ttf", 48)
+        font_preco_dest_multi = ImageFont.truetype("arialbd.ttf", 24)
         font_preco_normal   = ImageFont.truetype("arialbd.ttf", 35)
+        font_preco_norm_multi = ImageFont.truetype("arialbd.ttf", 19)
+        
         font_rod_destaque   = ImageFont.truetype("arialbd.ttf", 24)
         font_rod_validade   = ImageFont.truetype("arial.ttf", 22)
         font_rod_tabela     = ImageFont.truetype("arial.ttf", 20)
     except IOError:
-        font_sub_titulo = font_cod_bold = font_desc_bold = font_marca = font_marca_normal = font_preco_destaque = font_preco_normal = font_rod_destaque = font_rod_validade = font_rod_tabela = ImageFont.load_default()
+        font_sub_titulo = font_cod_bold = font_desc_bold = font_marca = font_marca_normal = font_preco_destaque = font_preco_dest_multi = font_preco_normal = font_preco_norm_multi = font_rod_destaque = font_rod_validade = font_rod_tabela = ImageFont.load_default()
 
     cabecalho_path = config.get('cabecalho_tema', '')
     img_cabecalho = None
@@ -254,7 +271,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
         img = Image.new("RGB", (LARGURA_TOTAL, ALTURA_FIXA_FINAL), color=cor_fundo_demais)
         draw = ImageDraw.Draw(img)
 
-        # 1. Cabecalho
+        # 1. Cabeçalho
         if img_cabecalho:
             img.paste(img_cabecalho, (0, 0))
         else:
@@ -306,12 +323,23 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
                 if marca_str:
                     draw.text((x + larg_card_dest_padrao//2, y_cursor + 445), marca_str, fill="#777777", font=font_marca, anchor="mm")
 
-                tarja_y1 = y_cursor + 475
+                tarja_y1 = y_cursor + 465
                 tarja_y2 = y_cursor + alt_card_dest - 12
                 draw.rounded_rectangle([x + 10, tarja_y1, x + larg_card_dest_padrao - 10, tarja_y2], radius=10, fill=cor_tarja_bg)
 
-                preco_fmt = str(prod.get('preco', '')).strip()
-                draw.text((x + larg_card_dest_padrao//2, tarja_y1 + (tarja_y2 - tarja_y1)//2), preco_fmt, fill=cor_preco_texto, font=font_preco_destaque, anchor="mm")
+                # Divisão de múltiplos preços (se houver '|' ou quebra de linha)
+                raw_preco = str(prod.get('preco', '')).replace('\n', '|').replace(';', '|')
+                precos_lista = [p.strip() for p in raw_preco.split('|') if p.strip()]
+
+                desenhar_precos_tarja(
+                    draw, 
+                    cx=x + larg_card_dest_padrao//2, 
+                    cy=tarja_y1 + (tarja_y2 - tarja_y1)//2, 
+                    precos=precos_lista, 
+                    font_single=font_preco_destaque, 
+                    font_multi=font_preco_dest_multi, 
+                    cor_texto=cor_preco_texto
+                )
 
             y_cursor += alt_card_dest + ESPACO_VERT
 
@@ -340,7 +368,7 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
                     draw.text((x + larg_card_norm_padrao - 12, y + 16), marca_str, fill="#666666", font=font_marca_normal, anchor="ra")
 
                 area_foto_x, area_foto_y = x + 10, y + 38
-                area_foto_w, area_foto_h = larg_card_norm_padrao - 20, 190
+                area_foto_w, area_foto_h = larg_card_norm_padrao - 20, 185
 
                 draw.rounded_rectangle([area_foto_x, area_foto_y, area_foto_x + area_foto_w, area_foto_y + area_foto_h], radius=6, fill="#FFFFFF")
 
@@ -354,24 +382,33 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
 
                 desc = str(prod.get('descricao', '')).upper()
                 linhas_desc = textwrap.wrap(desc, width=21)
-                y_texto = y + 242
+                y_texto = y + 237
                 for linha in linhas_desc[:2]:
                     draw.text((x + larg_card_norm_padrao//2, y_texto), linha, fill="#000000", font=font_desc_bold, anchor="mm")
                     y_texto += 23
 
-                tarja_y1 = y + 310
+                tarja_y1 = y + 300
                 tarja_y2 = y + alt_card_norm - 10
                 draw.rounded_rectangle([x + 8, tarja_y1, x + larg_card_norm_padrao - 8, tarja_y2], radius=8, fill=cor_tarja_bg)
 
-                preco_fmt = str(prod.get('preco', '')).strip()
-                draw.text((x + larg_card_norm_padrao//2, tarja_y1 + (tarja_y2 - tarja_y1)//2), preco_fmt, fill=cor_preco_texto, font=font_preco_normal, anchor="mm")
+                # Divisão de múltiplos preços no CSV
+                raw_preco = str(prod.get('preco', '')).replace('\n', '|').replace(';', '|')
+                precos_lista = [p.strip() for p in raw_preco.split('|') if p.strip()]
 
-        # 4. Rodape com QR Code
+                desenhar_precos_tarja(
+                    draw, 
+                    cx=x + larg_card_norm_padrao//2, 
+                    cy=tarja_y1 + (tarja_y2 - tarja_y1)//2, 
+                    precos=precos_lista, 
+                    font_single=font_preco_normal, 
+                    font_multi=font_preco_norm_multi, 
+                    cor_texto=cor_preco_texto
+                )
+
+        # 4. Rodapé
         y_rodape = ALTURA_FIXA_FINAL - ALTURA_RODAPE
         draw.rectangle([0, y_rodape, LARGURA_TOTAL, ALTURA_FIXA_FINAL], fill=cor_rodape_bg)
 
-        # O site e o QR Code do rodape usam somente o valor recebido no CSV.
-        # Se rodape_site estiver vazio, nenhum QR Code ou endereÃƒÆ’Ã‚Â§o serÃƒÆ’Ã‚Â¡ exibido.
         site_url = str(config.get('rodape_site', '')).strip()
         if site_url:
             card_qr = criar_card_qrcode_estilizado(site_url, cor_rodape_bg, tam_qr=110)
@@ -428,7 +465,6 @@ if __name__ == "__main__":
         if len(sys.argv) < 2:
             raise ValueError("Informe o arquivo CSV como primeiro parâmetro.")
 
-        # O ERP envia: GERAR_CATALOGO.EXE <arquivo.csv> <arquivo.jpg>
         arquivo_csv = normalizar_caminho_argumento(sys.argv[1])
         saida_cli = normalizar_caminho_argumento(sys.argv[2]) if len(sys.argv) >= 3 else None
 
@@ -464,11 +500,9 @@ if __name__ == "__main__":
                 reader = csv.DictReader(linhas_produtos, delimiter=';')
                 produtos.extend(reader)
 
-        # O segundo parÃƒÆ’Ã‚Â¢metro sempre prevalece sobre saida_jpg do CSV.
         renderizar_catalogo(config, produtos, saida_cli)
 
     except Exception:
-        # Salva o erro ao lado do JPG pedido; assim o ERP nÃƒÆ’Ã‚Â£o esconde a causa.
         pasta_log = os.path.dirname(saida_cli) if saida_cli else os.path.dirname(arquivo_csv or '')
         if not pasta_log or not os.path.isdir(pasta_log):
             pasta_log = os.getcwd()
