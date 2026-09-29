@@ -1125,41 +1125,48 @@ class FormEncarteWindow(ctk.CTkToplevel):
             f_row.pack(fill="x", pady=2, padx=5)
 
             num_exibicao = total_itens - idx
-            ctk.CTkLabel(f_row, text=f"#{num_exibicao}", width=35).pack(side="left", padx=5)
+            ctk.CTkLabel(f_row, text=f"#{num_exibicao}", width=30).pack(side="left", padx=(5, 2))
             
-            # Container do código e descrição logo abaixo conforme o modelo
-            frame_cod_desc = ctk.CTkFrame(f_row, fg_color="transparent", width=260)
+            # Container do código e descrição logo abaixo
+            frame_cod_desc = ctk.CTkFrame(f_row, fg_color="transparent", width=220)
             frame_cod_desc.pack(side="left", padx=2, fill="y")
 
-            # Linha superior: Código
+            # Linha 1: Código
             lbl_cod = ctk.CTkLabel(frame_cod_desc, text=f"Código: {item['codigo_prod']}", anchor="w", font=ctk.CTkFont(weight="bold"))
-            lbl_cod.pack(anchor="w")
+            lbl_cod.pack(anchor="w", fill="x")
             
-            # Linha inferior: Descrição do produto abaixo do código
-            desc_texto = item.get('descricao_prod') or ''
-            if desc_texto:
-                lbl_desc = ctk.CTkLabel(frame_cod_desc, text=desc_texto, anchor="w", font=ctk.CTkFont(size=11, weight="bold"), text_color=("#333333", "#CCCCCC"))
-                lbl_desc.pack(anchor="w")
+            # Linha 2: Descrição do produto abaixo do código
+            desc_texto = item.get('descricao_prod') or 'SEM DESCRIÇÃO'
+            lbl_desc = ctk.CTkLabel(
+                frame_cod_desc, 
+                text=desc_texto, 
+                anchor="w", 
+                justify="left",
+                wraplength=210,
+                font=ctk.CTkFont(size=11, weight="bold"), 
+                text_color=("#333333", "#4CAF50" if item.get('descricao_prod') else "#888888")
+            )
+            lbl_desc.pack(anchor="w", fill="x")
             
             # Coluna para a tag de Destaque
             txt_destaque = "⭐ [DESTAQUE]" if item.get('destaque') == 'S' else ""
             ctk.CTkLabel(f_row, text=txt_destaque, width=105, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#FF8F00", "#FFD54F")).pack(side="left", padx=2)
 
             qtde_str = f"{item['qtde_oferta']:.2f}".rstrip('0').rstrip('.')
-            ctk.CTkLabel(f_row, text=f"A partir de {qtde_str} un.", width=120, anchor="w", text_color=("#000000", "#81D4FA")).pack(side="left", padx=5)
+            ctk.CTkLabel(f_row, text=f"A partir de {qtde_str} un.", width=110, anchor="w", text_color=("#000000", "#81D4FA")).pack(side="left", padx=2)
 
             cor_preco = ("#2E7D32", "#A5D6A7") if item['preco_oferta'] > 0 else ("#E65100", "#FFB74D")
             lbl_preco = f"R$ {item['preco_oferta']:.2f}" if item['preco_oferta'] > 0 else "Preço Atual"
-            ctk.CTkLabel(f_row, text=lbl_preco, width=110, text_color=cor_preco, font=ctk.CTkFont(weight="bold")).pack(side="left", padx=5)
+            ctk.CTkLabel(f_row, text=lbl_preco, width=95, text_color=cor_preco, font=ctk.CTkFont(weight="bold")).pack(side="left", padx=2)
 
             foto_text = f"🖼️ {os.path.basename(item['item_foto'])}" if item.get('item_foto') else "Sem foto ind."
-            ctk.CTkLabel(f_row, text=foto_text, width=130, text_color="gray", anchor="w").pack(side="left", padx=5)
+            ctk.CTkLabel(f_row, text=foto_text, width=100, text_color="gray", anchor="w").pack(side="left", padx=2)
 
-            btn_del = ctk.CTkButton(f_row, text="🗑️", width=36, height=28, fg_color="#C62828", hover_color="#B71C1C", command=lambda i=idx: self.remover_item(i))
-            btn_del.pack(side="right", padx=3)
+            btn_del = ctk.CTkButton(f_row, text="🗑️", width=32, height=28, fg_color="#C62828", hover_color="#B71C1C", command=lambda i=idx: self.remover_item(i))
+            btn_del.pack(side="right", padx=2)
 
-            btn_edit = ctk.CTkButton(f_row, text="✏️", width=36, height=28, fg_color="#1976D2", hover_color="#0D47A1", command=lambda i=idx: self.editar_item(i))
-            btn_edit.pack(side="right", padx=3)
+            btn_edit = ctk.CTkButton(f_row, text="✏️", width=32, height=28, fg_color="#1976D2", hover_color="#0D47A1", command=lambda i=idx: self.editar_item(i))
+            btn_edit.pack(side="right", padx=2)
 
     def remover_item(self, index):
         if self.index_edicao == index:
