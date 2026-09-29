@@ -153,7 +153,6 @@ def desenhar_precos_tarja(draw, cx, cy, precos, font_single, font_multi, cor_tex
         draw.text((cx, cy), precos[0], fill=cor_texto, font=font_single, anchor="mm")
     else:
         qtd = len(precos)
-        # Espaçamento vertical entre cada linha de preço
         espacamento = 22 if qtd == 3 else 26
         y_inicio = cy - ((qtd - 1) * espacamento) // 2
         
@@ -327,8 +326,8 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
                 tarja_y2 = y_cursor + alt_card_dest - 12
                 draw.rounded_rectangle([x + 10, tarja_y1, x + larg_card_dest_padrao - 10, tarja_y2], radius=10, fill=cor_tarja_bg)
 
-                # Divisão de múltiplos preços (se houver '|' ou quebra de linha)
-                raw_preco = str(prod.get('preco', '')).replace('\n', '|').replace(';', '|')
+                # Tratamento e divisão dos preços no CSV
+                raw_preco = str(prod.get('preco', '')).replace('\r\n', '|').replace('\n', '|').replace(';', '|')
                 precos_lista = [p.strip() for p in raw_preco.split('|') if p.strip()]
 
                 desenhar_precos_tarja(
@@ -391,8 +390,8 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
                 tarja_y2 = y + alt_card_norm - 10
                 draw.rounded_rectangle([x + 8, tarja_y1, x + larg_card_norm_padrao - 8, tarja_y2], radius=8, fill=cor_tarja_bg)
 
-                # Divisão de múltiplos preços no CSV
-                raw_preco = str(prod.get('preco', '')).replace('\n', '|').replace(';', '|')
+                # Tratamento e divisão dos preços no CSV
+                raw_preco = str(prod.get('preco', '')).replace('\r\n', '|').replace('\n', '|').replace(';', '|')
                 precos_lista = [p.strip() for p in raw_preco.split('|') if p.strip()]
 
                 desenhar_precos_tarja(
