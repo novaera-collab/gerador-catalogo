@@ -1116,17 +1116,21 @@ class FormEncarteWindow(ctk.CTkToplevel):
             num_exibicao = total_itens - idx
             ctk.CTkLabel(f_row, text=f"#{num_exibicao}", width=35).pack(side="left", padx=5)
             
-            # Container vertical para o Código e a Descrição do produto abaixo dele
-            frame_cod_desc = ctk.CTkFrame(f_row, fg_color="transparent")
+            # Container vertical para o Código e a Descrição do produto logo abaixo dele
+            frame_cod_desc = ctk.CTkFrame(f_row, fg_color="transparent", width=240)
             frame_cod_desc.pack(side="left", padx=2, fill="y")
 
-            ctk.CTkLabel(frame_cod_desc, text=f"Código: {item['codigo_prod']}", anchor="w", font=ctk.CTkFont(weight="bold")).pack(anchor="w")
+            # Linha superior: Código
+            lbl_cod = ctk.CTkLabel(frame_cod_desc, text=f"Código: {item['codigo_prod']}", anchor="w", font=ctk.CTkFont(weight="bold"))
+            lbl_cod.pack(anchor="w")
             
+            # Linha inferior: Descrição do produto abaixo do código
             desc_texto = item.get('descricao_prod') or ''
             if desc_texto:
-                ctk.CTkLabel(frame_cod_desc, text=desc_texto, anchor="w", font=ctk.CTkFont(size=11), text_color="gray").pack(anchor="w")
+                lbl_desc = ctk.CTkLabel(frame_cod_desc, text=desc_texto, anchor="w", font=ctk.CTkFont(size=11, weight="bold"), text_color=("#333333", "#CCCCCC"))
+                lbl_desc.pack(anchor="w")
             
-            # Coluna dedicada para a tag de Destaque
+            # Coluna para a tag de Destaque
             txt_destaque = "⭐ [DESTAQUE]" if item.get('destaque') == 'S' else ""
             ctk.CTkLabel(f_row, text=txt_destaque, width=105, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#FF8F00", "#FFD54F")).pack(side="left", padx=2)
 
