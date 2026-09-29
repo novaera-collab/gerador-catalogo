@@ -859,6 +859,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
         self.encarte_id = encarte_id
         self.callback_refresh = callback_refresh
         self.itens = []
+        self.index_edicao = None  # Guarda o índice do item sendo editado
 
         self.title("Alteração de Encarte" if encarte_id else "Novo Encarte")
 
@@ -932,8 +933,8 @@ class FormEncarteWindow(ctk.CTkToplevel):
         btn_foto = ctk.CTkButton(frame_prod, text="🖼️", width=36, height=28, command=self.buscar_foto_item)
         btn_foto.grid(row=0, column=10, padx=(2, 6), pady=6)
 
-        btn_add = ctk.CTkButton(frame_prod, text="➕ Adicionar", width=100, height=30, fg_color="#2E7D32", hover_color="#1B5E20", command=self.adicionar_item)
-        btn_add.grid(row=0, column=11, padx=6, pady=6)
+        self.btn_add = ctk.CTkButton(frame_prod, text="➕ Adicionar", width=100, height=30, fg_color="#2E7D32", hover_color="#1B5E20", command=self.adicionar_item)
+        self.btn_add.grid(row=0, column=11, padx=6, pady=6)
 
         self.frame_lista = ctk.CTkScrollableFrame(self)
         self.frame_lista.pack(fill="both", expand=True, padx=15, pady=5)
@@ -1027,7 +1028,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
         cod_formatted = self.formatar_codigo_5_digitos(cod_raw)
 
         if is_destaque == 'S':
-            total_destaques = sum(1 for item in self.itens if item.get('destaque') == 'S')
+            total_destaques = sum(1 for idx, item in enumerate(self.itens) if item.get('destaque') == 'S' and idx != self.index_edicao)
             if total_destaques >= 3:
                 messagebox.showwarning("Limite Atingido", "Você pode marcar no máximo 3 itens como destaque por encarte.", parent=self)
                 return
@@ -1041,8 +1042,8 @@ class FormEncarteWindow(ctk.CTkToplevel):
             self.txt_p_qtde.focus()
             return
 
-        for item in self.itens:
-            if item['codigo_prod'] == cod_formatted and item['qtde_oferta'] == qtde_val:
+        for idx, item in enumerate(self.itens):
+            if idx != self.index_edicao and item['codigo_prod'] == cod_formatted and item['qtde_oferta'] == qtde_val:
                 messagebox.showwarning(
                     "Produto Duplicado",
                     f"O produto {cod_formatted} já está cadastrado com a quantidade {qtde_val:.2f}.\n\n"
@@ -1064,14 +1065,22 @@ class FormEncarteWindow(ctk.CTkToplevel):
 
         desc_prod = obter_descricao_produto(cod_formatted)
 
-        self.itens.insert(0, {
+        novo_item = {
             'codigo_prod': cod_formatted, 
             'descricao_prod': desc_prod,
             'qtde_oferta': qtde_val, 
             'preco_oferta': preco_val,
             'destaque': is_destaque,
             'item_foto': foto_path
-        })
+        }
+
+        if self.index_edicao is not None:
+            self.itens[self.index_edicao] = novo_item
+            self.index_edicao = None
+            self.btn_add.configure(text="➕ Adicionar", fg_color="#2E7D32", hover_color="#1B5E20")
+        else:
+            self.itens.insert(0, novo_item)
+
         self.atualizar_grid()
 
         self.txt_p_cod.delete(0, 'end')
@@ -1083,7 +1092,9 @@ class FormEncarteWindow(ctk.CTkToplevel):
         self.txt_p_cod.focus()
 
     def editar_item(self, index):
-        item = self.itens.pop(index)
+        self.index_edicao = index
+        item = self.itens[index]
+
         self.txt_p_cod.delete(0, 'end')
         self.txt_p_cod.insert(0, item['codigo_prod'])
         
@@ -1101,8 +1112,8 @@ class FormEncarteWindow(ctk.CTkToplevel):
             self.chk_destaque.select()
         else:
             self.chk_destaque.deselect()
-        
-        self.atualizar_grid()
+
+        self.btn_add.configure(text="🔄 Atualizar", fg_color="#1976D2", hover_color="#0D47A1")
 
     def atualizar_grid(self):
         for w in self.frame_lista.winfo_children():
@@ -1116,8 +1127,8 @@ class FormEncarteWindow(ctk.CTkToplevel):
             num_exibicao = total_itens - idx
             ctk.CTkLabel(f_row, text=f"#{num_exibicao}", width=35).pack(side="left", padx=5)
             
-            # Container vertical para o Código e a Descrição do produto logo abaixo dele
-            frame_cod_desc = ctk.CTkFrame(f_row, fg_color="transparent", width=240)
+            # Container do código e descrição logo abaixo conforme o modelo
+            frame_cod_desc = ctk.CTkFrame(f_row, fg_color="transparent", width=260)
             frame_cod_desc.pack(side="left", padx=2, fill="y")
 
             # Linha superior: Código
@@ -1151,6 +1162,18 @@ class FormEncarteWindow(ctk.CTkToplevel):
             btn_edit.pack(side="right", padx=3)
 
     def remover_item(self, index):
+        if self.index_edicao == index:
+            self.index_edicao = None
+            self.btn_add.configure(text="➕ Adicionar", fg_color="#2E7D32", hover_color="#1B5E20")
+            self.txt_p_cod.delete(0, 'end')
+            self.txt_p_qtde.delete(0, 'end')
+            self.txt_p_qtde.insert(0, "1")
+            self.txt_p_preco.delete(0, 'end')
+            self.txt_p_foto.delete(0, 'end')
+            self.chk_destaque.deselect()
+        elif self.index_edicao is not None and index < self.index_edicao:
+            self.index_edicao -= 1
+
         self.itens.pop(index)
         self.atualizar_grid()
 
