@@ -937,7 +937,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
         ctk.CTkLabel(frame_prod, text="Foto:").grid(row=0, column=8, padx=2, pady=6, sticky="w")
         self.txt_p_foto = ctk.CTkEntry(frame_prod, width=120, placeholder_text="Caminho foto...")
         self.txt_p_foto.grid(row=0, column=9, padx=2, pady=6)
-        btn_foto = ctk.CTkButton(frame_prod, text="🖼️️", width=36, height=28, command=self.buscar_foto_item)
+        btn_foto = ctk.CTkButton(frame_prod, text="🖼", width=36, height=28, command=self.buscar_foto_item)
         btn_foto.grid(row=0, column=10, padx=(2, 6), pady=6)
 
         self.btn_add = ctk.CTkButton(frame_prod, text="➕ Adicionar", width=100, height=30, fg_color="#2E7D32", hover_color="#1B5E20", command=self.adicionar_item)
@@ -1134,19 +1134,24 @@ class FormEncarteWindow(ctk.CTkToplevel):
             num_exibicao = total_itens - idx
             ctk.CTkLabel(f_row, text=f"#{num_exibicao}", width=30).pack(side="left", padx=(5, 2))
             
-            # Exibe a descrição do Produto pesquisada do Banco
-            desc_texto = item.get('descricao_prod') or 'SEM DESCRIÇÃO'
+            # Formata e limita a descrição em até 36 caracteres para não quebrar o alinhamento
+            desc_original = item.get('descricao_prod') or 'SEM DESCRIÇÃO'
+            if len(desc_original) > 36:
+                desc_texto = desc_original[:33] + "..."
+            else:
+                desc_texto = desc_original
+                
             lbl_desc = ctk.CTkLabel(
                 f_row, 
                 text=desc_texto, 
                 anchor="w", 
-                width=240,
+                width=270,
                 font=ctk.CTkFont(size=12, weight="bold"), 
                 text_color=("#333333", "#4CAF50" if item.get('descricao_prod') else "#888888")
             )
             lbl_desc.pack(side="left", padx=(2, 5))
 
-            lbl_cod = ctk.CTkLabel(f_row, text=f"[Cód: {item['codigo_prod']}]", anchor="w", font=ctk.CTkFont(weight="bold"), text_color="gray")
+            lbl_cod = ctk.CTkLabel(f_row, text=f"[Cód: {item['codigo_prod']}]", anchor="w", width=85, font=ctk.CTkFont(weight="bold"), text_color="gray")
             lbl_cod.pack(side="left", padx=2)
             
             txt_destaque = "⭐ [DESTAQUE]" if item.get('destaque') == 'S' else ""
@@ -1447,7 +1452,7 @@ class AppPrincipal(ctk.CTk):
                     frame_acoes, text="🗑️ Excluir", width=95, height=32, fg_color="#C62828", hover_color="#B71C1C",
                     command=lambda e_id=enc['id'], e_tit=enc['titulo']: self.excluir_encarte(e_id, e_tit)
                 )
-                btn_excluir.pack(side="left", padx=4)
+                btn_excluir.pack(side="right", padx=4)
 
         except Exception as e:
             ctk.CTkLabel(self.frame_lista, text=f"Erro ao consultar o banco de dados:\n{e}", text_color="#EF5350").pack(pady=20)
