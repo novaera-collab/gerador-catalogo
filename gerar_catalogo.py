@@ -189,10 +189,10 @@ def renderizar_catalogo(config, produtos, caminho_saida_base):
         font_marca_normal   = ImageFont.truetype("arialbd.ttf", 20)
         
         # Fontes de Preço
-        font_preco_destaque = ImageFont.truetype("arialbd.ttf", 48)
+        font_preco_destaque = ImageFont.truetype("arialbd.ttf", 55)
         font_preco_dest_multi = ImageFont.truetype("arialbd.ttf", 24)
-        font_preco_normal   = ImageFont.truetype("arialbd.ttf", 35)
-        font_preco_norm_multi = ImageFont.truetype("arialbd.ttf", 19)
+        font_preco_normal   = ImageFont.truetype("arialbd.ttf", 50)
+        font_preco_norm_multi = ImageFont.truetype("arialbd.ttf", 24)
         
         font_rod_destaque   = ImageFont.truetype("arialbd.ttf", 24)
         font_rod_validade   = ImageFont.truetype("arial.ttf", 22)
