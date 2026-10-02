@@ -236,14 +236,25 @@ def obter_descricao_produto(codigo):
         pass
     return ""
 
-def escolher_cor_dialog(entry_widget, parent=None):
-    """Abre a paleta de cores (colorpicker) e atualiza o campo com o código #HEX."""
-    cor_inicial = entry_widget.get().strip() or "#FFFFFF"
+def eh_cor_valida(hex_code):
+    """Verifica se uma string de cor é válida (ex: #FFFFFF ou #FFF)."""
+    if not hex_code or not isinstance(hex_code, str):
+        return False
+    hex_code = hex_code.strip()
+    return bool(re.match(r"^#(?:[0-9a-fA-F]{3}){1,2}$", hex_code))
+
+def escolher_cor_dialog(entry_widget, color_preview_box, parent=None):
+    """Abre a paleta de cores (colorpicker), atualiza o campo com o código #HEX e a caixa de preview."""
+    cor_inicial = entry_widget.get().strip()
+    if not eh_cor_valida(cor_inicial):
+        cor_inicial = "#FFFFFF"
     try:
         rgb, hex_code = colorchooser.askcolor(color=cor_inicial, parent=parent, title="Selecione a Cor")
         if hex_code:
+            hex_upper = hex_code.upper()
             entry_widget.delete(0, 'end')
-            entry_widget.insert(0, hex_code.upper())
+            entry_widget.insert(0, hex_upper)
+            color_preview_box.configure(fg_color=hex_upper)
     except Exception as e:
         messagebox.showerror("Erro Paleta de Cores", f"Não foi possível abrir a paleta de cores:\n{e}", parent=parent)
 
@@ -254,7 +265,7 @@ class ConfiguraDesignModal(ctk.CTkToplevel):
         self.callback_confirmar = callback_confirmar
         self.title("Configura Design do Encarte")
 
-        ctk.CTkLabel(self, text="🎨 Configuração de Design & Cores Personalizadas", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=10)
+        ctk.CTkLabel(self, text="🌐 Configuração de Design & Cores Personalizadas", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=10)
 
         frame_form = ctk.CTkFrame(self)
         frame_form.pack(fill="both", expand=True, padx=15, pady=5)
@@ -274,30 +285,48 @@ class ConfiguraDesignModal(ctk.CTkToplevel):
 
         # Tema do Encarte
         ctk.CTkLabel(frame_form, text="Tema do Cabeçalho:").grid(row=6, column=0, padx=10, pady=6, sticky="w")
-        self.txt_encarte_tema = ctk.CTkEntry(frame_form, width=280, placeholder_text="Caminho da imagem do tema...")
+        self.txt_encarte_tema = ctk.CTkEntry(frame_form, width=220, placeholder_text="Caminho da imagem do tema...")
         self.txt_encarte_tema.insert(0, dados_design_atuais.get("encarte_tema", ""))
         self.txt_encarte_tema.grid(row=6, column=1, padx=5, pady=6)
         
         btn_busca_tema = ctk.CTkButton(frame_form, text="📁 Buscar", width=80, command=self._buscar_tema)
-        btn_busca_tema.grid(row=6, column=2, padx=5, pady=6)
+        btn_busca_tema.grid(row=6, column=2, columnspan=2, padx=5, pady=6)
 
-        btn_confirmar = ctk.CTkButton(self, text="✔ Aplicar Design", fg_color="#0288D1", hover_color="#0277BD", font=ctk.CTkFont(weight="bold"), height=36, command=self._confirmar)
-        btn_confirmar.pack(pady=15)
+        frame_bottom_btn = ctk.CTkFrame(self, fg_color="transparent")
+        frame_bottom_btn.pack(pady=15)
 
-        centralizar_no_topo_da_principal(self, 540, 420)
+        btn_preview = ctk.CTkButton(frame_bottom_btn, text="👁️ Preview", fg_color="#37474F", hover_color="#263238", font=ctk.CTkFont(weight="bold"), height=36, width=120, command=self._abrir_preview)
+        btn_preview.pack(side="left", padx=10)
+
+        btn_confirmar = ctk.CTkButton(frame_bottom_btn, text="✔ Aplicar Design", fg_color="#0288D1", hover_color="#0277BD", font=ctk.CTkFont(weight="bold"), height=36, width=150, command=self._confirmar)
+        btn_confirmar.pack(side="left", padx=10)
+
+        centralizar_no_topo_da_principal(self, 580, 470)
 
     def _criar_campo_cor(self, parent, label_text, row, valor_inicial):
         ctk.CTkLabel(parent, text=label_text).grid(row=row, column=0, padx=10, pady=6, sticky="w")
-        txt_entry = ctk.CTkEntry(parent, width=280, placeholder_text="#HEX ex: #FF0000")
+        txt_entry = ctk.CTkEntry(parent, width=220, placeholder_text="#HEX ex: #FF0000")
         txt_entry.insert(0, valor_inicial)
         txt_entry.grid(row=row, column=1, padx=5, pady=6)
 
+        # Caixa visual para amostragem da cor selecionada ao lado
+        cor_preview = valor_inicial if eh_cor_valida(valor_inicial) else "#FFFFFF"
+        box_preview = ctk.CTkFrame(parent, width=28, height=28, fg_color=cor_preview, corner_radius=4, border_width=1, border_color="#555555")
+        box_preview.grid(row=row, column=2, padx=(5, 2), pady=6)
+
+        txt_entry.bind("<KeyRelease>", lambda e, entry=txt_entry, box=box_preview: self._atualizar_box_cor(entry, box))
+
         btn_palette = ctk.CTkButton(
             parent, text="🎨", width=36, fg_color="#37474F", hover_color="#263238",
-            command=lambda: escolher_cor_dialog(txt_entry, self)
+            command=lambda entry=txt_entry, box=box_preview: escolher_cor_dialog(entry, box, self)
         )
-        btn_palette.grid(row=row, column=2, padx=5, pady=6)
+        btn_palette.grid(row=row, column=3, padx=5, pady=6)
         return txt_entry
+
+    def _atualizar_box_cor(self, entry, box):
+        cor = entry.get().strip()
+        if eh_cor_valida(cor):
+            box.configure(fg_color=cor)
 
     def _buscar_tema(self):
         caminho = filedialog.askopenfilename(
@@ -308,6 +337,60 @@ class ConfiguraDesignModal(ctk.CTkToplevel):
         if caminho:
             self.txt_encarte_tema.delete(0, 'end')
             self.txt_encarte_tema.insert(0, caminho.replace("/", "\\"))
+
+    def _abrir_preview(self):
+        """Abre uma tela simulando o layout final do encarte com as cores selecionadas."""
+        c_tit = self.txt_cor_tit_rodape.get().strip() or "#008040"
+        c_tarja = self.txt_cor_grid_tarja.get().strip() or "#FAFEAF"
+        c_preco = self.txt_cor_grid_preco.get().strip() or "#000000"
+        c_destaque = self.txt_cor_fundo_destaque.get().strip() or "#FB9F68"
+        c_demais = self.txt_cor_fundo_demais.get().strip() or "#BA4EE9"
+        c_rodape = self.txt_cor_fundo_rodape.get().strip() or "#24A62E"
+
+        top_prev = Toplevel(self)
+        top_prev.title("Visualização Prévia (Preview) de Modelo de Cores")
+        top_prev.geometry("450x580")
+        top_prev.configure(bg="#1E1E1E")
+
+        # Cabeçalho do Encarte
+        f_head = ctk.CTkFrame(top_prev, fg_color=c_tit if eh_cor_valida(c_tit) else "#008040", height=60, corner_radius=0)
+        f_head.pack(fill="x", padx=10, pady=(10, 5))
+        ctk.CTkLabel(f_head, text="CABEÇALHO DO ENCARTE", text_color="#FFFFFF", font=ctk.CTkFont(size=14, weight="bold")).pack(expand=True)
+
+        # Fundo do Encarte / Área dos Produtos
+        f_corpo = ctk.CTkFrame(top_prev, fg_color="#2A2A2A")
+        f_corpo.pack(fill="both", expand=True, padx=10, pady=5)
+
+        # Grid Destaque
+        f_item_dest = ctk.CTkFrame(f_corpo, fg_color=c_destaque if eh_cor_valida(c_destaque) else "#FB9F68", corner_radius=6)
+        f_item_dest.pack(fill="x", padx=15, pady=10)
+        ctk.CTkLabel(f_item_dest, text="⭐ ITEM DESTAQUE", text_color="#000000", font=ctk.CTkFont(size=11, weight="bold")).pack(pady=(4, 0))
+        
+        f_tarja_d = ctk.CTkFrame(f_item_dest, fg_color=c_tarja if eh_cor_valida(c_tarja) else "#FAFEAF", height=24)
+        f_tarja_d.pack(fill="x", padx=8, pady=4)
+        ctk.CTkLabel(f_tarja_d, text="Descrição do Produto Destaque", text_color="#000000", font=ctk.CTkFont(size=10)).pack(expand=True)
+        
+        f_prc_d = ctk.CTkFrame(f_item_dest, fg_color=c_preco if eh_cor_valida(c_preco) else "#000000", height=30)
+        f_prc_d.pack(fill="x", padx=8, pady=(0, 8))
+        ctk.CTkLabel(f_prc_d, text="R$ 19,90", text_color="#FFFFFF", font=ctk.CTkFont(size=12, weight="bold")).pack(expand=True)
+
+        # Grid Demais Itens
+        f_item_demais = ctk.CTkFrame(f_corpo, fg_color=c_demais if eh_cor_valida(c_demais) else "#BA4EE9", corner_radius=6)
+        f_item_demais.pack(fill="x", padx=15, pady=10)
+        ctk.CTkLabel(f_item_demais, text="ITEM COMUM", text_color="#000000", font=ctk.CTkFont(size=11, weight="bold")).pack(pady=(4, 0))
+
+        f_tarja_m = ctk.CTkFrame(f_item_demais, fg_color=c_tarja if eh_cor_valida(c_tarja) else "#FAFEAF", height=24)
+        f_tarja_m.pack(fill="x", padx=8, pady=4)
+        ctk.CTkLabel(f_tarja_m, text="Descrição do Produto Demais", text_color="#000000", font=ctk.CTkFont(size=10)).pack(expand=True)
+
+        f_prc_m = ctk.CTkFrame(f_item_demais, fg_color=c_preco if eh_cor_valida(c_preco) else "#000000", height=30)
+        f_prc_m.pack(fill="x", padx=8, pady=(0, 8))
+        ctk.CTkLabel(f_prc_m, text="R$ 9,90", text_color="#FFFFFF", font=ctk.CTkFont(size=12, weight="bold")).pack(expand=True)
+
+        # Rodapé
+        f_rodape = ctk.CTkFrame(top_prev, fg_color=c_rodape if eh_cor_valida(c_rodape) else "#24A62E", height=45, corner_radius=0)
+        f_rodape.pack(fill="x", padx=10, pady=(5, 10))
+        ctk.CTkLabel(f_rodape, text="RODAPÉ DO ENCARTE", text_color="#FFFFFF", font=ctk.CTkFont(size=12, weight="bold")).pack(expand=True)
 
     def _confirmar(self):
         dados_design = {
@@ -467,7 +550,7 @@ class GerarEncarteModal(ctk.CTkToplevel):
         self.title(f"Gerar Encarte #{encarte_id}")
         self.contatos_map = {}
 
-        ctk.CTkLabel(self, text=f"⚙️ Gerar Encarte: {encarte_titulo}", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=(15, 10))
+        ctk.CTkLabel(self, text=f"⚡ Gerar Encarte: {encarte_titulo}", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=(15, 10))
 
         frame_ct = ctk.CTkFrame(self, fg_color="transparent")
         frame_ct.pack(fill="x", padx=20, pady=5)
@@ -682,11 +765,11 @@ class ParametrosWindow(ctk.CTkToplevel):
         self.txt_rodape_logo_fone = self._criar_campo_caminho(tab_dirs, "Rodapé Logo Fone:", 4, params_db.get("rodape_logo_fone", ""), pasta=False)
 
         ctk.CTkLabel(tab_dirs, text="Rodapé Site:").grid(row=5, column=0, padx=10, pady=6, sticky="w")
-        self.txt_cabecalho_site = ctk.CTkEntry(tab_dirs, width=280)
+        self.txt_cabecalho_site = ctk.CTkEntry(tab_dirs, width=220)
         self.txt_cabecalho_site.insert(0, params_db.get("cabecalho_site", ""))
         self.txt_cabecalho_site.grid(row=5, column=1, padx=5, pady=6)
 
-        # Campos de cores com Botão de Seleção de Cores (Paleta)
+        # Campos de cores com Botão de Seleção de Cores (Paleta) e Box de Amostra
         self.txt_cor_tit_rodape = self._criar_campo_cor(tab_dirs, "Cor Título/Rodapé:", 6, params_db.get("cor_tit_rodape", ""))
         self.txt_cor_grid_tarja = self._criar_campo_cor(tab_dirs, "Cor Grid Tarja:", 7, params_db.get("cor_grid_tarja", ""))
         self.txt_cor_grid_preco = self._criar_campo_cor(tab_dirs, "Cor Grid Preço:", 8, params_db.get("cor_grid_preco", ""))
@@ -699,24 +782,35 @@ class ParametrosWindow(ctk.CTkToplevel):
         btn_salvar = ctk.CTkButton(self, text="💾 Salvar Parâmetros", fg_color="#2E7D32", hover_color="#1B5E20", font=ctk.CTkFont(weight="bold"), height=38, command=self.salvar)
         btn_salvar.pack(pady=(0, 15))
 
-        centralizar_no_topo_da_principal(self, 700, 640)
+        centralizar_no_topo_da_principal(self, 720, 660)
 
     def _criar_campo_cor(self, parent, label_text, row, valor_inicial):
         ctk.CTkLabel(parent, text=label_text).grid(row=row, column=0, padx=10, pady=6, sticky="w")
-        txt_entry = ctk.CTkEntry(parent, width=280, placeholder_text="#HEX ou Código Cor")
+        txt_entry = ctk.CTkEntry(parent, width=220, placeholder_text="#HEX ou Código Cor")
         txt_entry.insert(0, valor_inicial)
         txt_entry.grid(row=row, column=1, padx=5, pady=6)
 
+        cor_preview = valor_inicial if eh_cor_valida(valor_inicial) else "#FFFFFF"
+        box_preview = ctk.CTkFrame(parent, width=28, height=28, fg_color=cor_preview, corner_radius=4, border_width=1, border_color="#555555")
+        box_preview.grid(row=row, column=2, padx=(5, 2), pady=6)
+
+        txt_entry.bind("<KeyRelease>", lambda e, entry=txt_entry, box=box_preview: self._atualizar_box_cor(entry, box))
+
         btn_color = ctk.CTkButton(
             parent, text="🎨", width=36, fg_color="#37474F", hover_color="#263238",
-            command=lambda: escolher_cor_dialog(txt_entry, self)
+            command=lambda entry=txt_entry, box=box_preview: escolher_cor_dialog(entry, box, self)
         )
-        btn_color.grid(row=row, column=2, padx=5, pady=6)
+        btn_color.grid(row=row, column=3, padx=5, pady=6)
         return txt_entry
+
+    def _atualizar_box_cor(self, entry, box):
+        cor = entry.get().strip()
+        if eh_cor_valida(cor):
+            box.configure(fg_color=cor)
 
     def _criar_campo_caminho(self, parent, label_text, row, valor_inicial, pasta=True):
         ctk.CTkLabel(parent, text=label_text).grid(row=row, column=0, padx=10, pady=6, sticky="w")
-        txt_entry = ctk.CTkEntry(parent, width=280)
+        txt_entry = ctk.CTkEntry(parent, width=220)
         txt_entry.insert(0, valor_inicial)
         txt_entry.grid(row=row, column=1, padx=5, pady=6)
 
@@ -724,7 +818,7 @@ class ParametrosWindow(ctk.CTkToplevel):
             parent, text="📁 Buscar", width=80, 
             command=lambda: self._selecionar_caminho(txt_entry, pasta)
         )
-        btn_procurar.grid(row=row, column=2, padx=5, pady=6)
+        btn_procurar.grid(row=row, column=2, columnspan=2, padx=5, pady=6)
         return txt_entry
 
     def _selecionar_caminho(self, entry_widget, pasta=True):
@@ -994,7 +1088,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
         self.txt_titulo = ctk.CTkEntry(frame_head, width=380, placeholder_text="Ex: ENCARTE FARMAX")
         self.txt_titulo.grid(row=0, column=1, columnspan=2, padx=8, pady=6, sticky="w")
 
-        # Botão CONFIGURA DESIGN (FIGURA 2)
+        # Botão CONFIGURA DESIGN
         btn_config_design = ctk.CTkButton(
             frame_head, text="🎨 CONFIGURA DESIGN", fg_color="#00A2E8", hover_color="#0086C0", 
             text_color="white", font=ctk.CTkFont(weight="bold"), height=32,
@@ -1128,10 +1222,18 @@ class FormEncarteWindow(ctk.CTkToplevel):
 
         cod_formatted = self.formatar_codigo_5_digitos(cod_raw)
 
-        if is_destaque == 'S':
-            total_destaques = sum(1 for idx, item in enumerate(self.itens) if item.get('destaque') == 'S' and idx != self.index_edicao)
-            if total_destaques >= 3:
-                messagebox.showwarning("Limite Atingido", "Você pode marcar no máximo 3 itens como destaque por encarte.", parent=self)
+        # Regra de Destaques Únicos por CÓDIGO
+        codigos_destaque_atuais = set()
+        for idx, item in enumerate(self.itens):
+            if idx == self.index_edicao:
+                continue
+            if item.get('destaque') == 'S':
+                codigos_destaque_atuais.add(item['codigo_prod'])
+
+        # Se for marcar destaque e esse código ainda não era um dos destaques
+        if is_destaque == 'S' and cod_formatted not in codigos_destaque_atuais:
+            if len(codigos_destaque_atuais) >= 3:
+                messagebox.showwarning("Limite Atingido", "Você pode marcar no máximo 3 CÓDIGOS DE PRODUTOS diferentes como destaque por encarte.", parent=self)
                 return
 
         try:
@@ -1181,6 +1283,11 @@ class FormEncarteWindow(ctk.CTkToplevel):
             self.btn_add.configure(text="➕ Adicionar", fg_color="#2E7D32", hover_color="#1B5E20")
         else:
             self.itens.insert(0, novo_item)
+
+        # Atualiza para que todos os itens do mesmo código sincronizem o status de Destaque
+        for item in self.itens:
+            if item['codigo_prod'] == cod_formatted:
+                item['destaque'] = is_destaque
 
         self.atualizar_grid()
 
@@ -1263,7 +1370,7 @@ class FormEncarteWindow(ctk.CTkToplevel):
             btn_del = ctk.CTkButton(f_row, text="🗑️", width=32, height=28, fg_color="#C62828", hover_color="#B71C1C", command=lambda i=idx: self.remover_item(i))
             btn_del.pack(side="right", padx=2)
 
-            btn_edit = ctk.CTkButton(f_row, text="✏️", width=32, height=28, fg_color="#1976D2", hover_color="#0D47A1", command=lambda i=idx: self.editar_item(i))
+            btn_edit = ctk.CTkButton(f_row, text="✏️️", width=32, height=28, fg_color="#1976D2", hover_color="#0D47A1", command=lambda i=idx: self.editar_item(i))
             btn_edit.pack(side="right", padx=2)
 
     def remover_item(self, index):
